@@ -1,0 +1,24 @@
+# Лични настройки / логове - не за в git (може да съдържат API ключове)
+settings.json
+settings.json.tmp
+app.log
+app.log.*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# PyInstaller build артефакти
+build/
+dist/
+*.spec
+
+# Bundled Tesseract (binary - виж README "Build" секцията защо не е в git)
+tesseract/
+
+# OS junk файлове
+.DS_Store
+Thumbs.db

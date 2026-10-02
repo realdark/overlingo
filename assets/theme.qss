@@ -1,0 +1,267 @@
+/* =========================================================
+   SCREEN TRANSLATOR - ЕДИННА ТЪМНА ТЕМА
+
+   Забележка: НЯМА глобално правило "QWidget { background: ... }"
+   нарочно - MainWindow, OverlayPanel и SecondaryOverlay разчитат
+   на WA_TranslucentBackground + собствен paintEvent за прозрачния
+   заоблен фон; глобален background тук би го счупил. Всичко по-долу
+   е ограничено до конкретни класове/имена, за да не пипа тези.
+   ========================================================= */
+
+/* --- Диалози (Settings, About, предупреждения) --- */
+QDialog {
+    background-color: #1e1e1e;
+}
+QDialog QLabel {
+    color: #e5e7eb;
+    font-size: 13px;
+}
+
+/* --- Табове в Settings диалога --- */
+QDialog QTabWidget::pane {
+    border: 1px solid rgba(90, 90, 90, 150);
+    border-radius: 6px;
+    background-color: #1e1e1e;
+    top: -1px;
+}
+QDialog QTabBar::tab {
+    background-color: #2a2a2a;
+    color: #e5e7eb;
+    padding: 6px 14px;
+    border: 1px solid rgba(90, 90, 90, 150);
+    border-bottom: none;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    margin-right: 2px;
+}
+QDialog QTabBar::tab:selected {
+    background-color: #3b82f6;
+    color: white;
+}
+QDialog QTabBar::tab:hover:!selected {
+    background-color: #35363a;
+}
+
+/* --- Полета за въвеждане в диалозите --- */
+QDialog QLineEdit,
+QDialog QSpinBox,
+QDialog QComboBox {
+    background-color: #2a2a2a;
+    color: #e5e7eb;
+    border: 1px solid rgba(90, 90, 90, 150);
+    border-radius: 5px;
+    padding: 4px 8px;
+    selection-background-color: #3b82f6;
+}
+QDialog QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+QDialog QComboBox QAbstractItemView {
+    background-color: #2a2a2a;
+    color: #e5e7eb;
+    selection-background-color: #3b82f6;
+    border: 1px solid rgba(90, 90, 90, 150);
+}
+
+/* Изключени (read-only/disabled) полета - без това изглеждат
+   идентично на активните, защото по-горе задаваме твърди цветове,
+   които засенчват стандартното "избледняване" на Qt. */
+QDialog QLineEdit:disabled,
+QDialog QSpinBox:disabled,
+QDialog QComboBox:disabled {
+    background-color: rgba(42, 42, 42, 120);
+    color: rgba(229, 231, 235, 90);
+    border: 1px solid rgba(90, 90, 90, 70);
+}
+
+/* --- Чекбоксове --- */
+QDialog QCheckBox {
+    color: #e5e7eb;
+    spacing: 8px;
+}
+QDialog QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1px solid rgba(150, 150, 150, 180);
+    background-color: #2a2a2a;
+}
+QDialog QCheckBox::indicator:checked {
+    background-color: #3b82f6;
+    border-color: #3b82f6;
+}
+QDialog QCheckBox:disabled {
+    color: rgba(229, 231, 235, 90);
+}
+QDialog QCheckBox::indicator:disabled {
+    background-color: rgba(42, 42, 42, 80);
+    border: 1px solid rgba(150, 150, 150, 70);
+}
+
+/* --- Плъзгач (прозрачност на overlay) --- */
+QDialog QSlider::groove:horizontal {
+    height: 4px;
+    background: rgba(90, 90, 90, 150);
+    border-radius: 2px;
+}
+QDialog QSlider::handle:horizontal {
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    background: #3b82f6;
+    border-radius: 7px;
+}
+QDialog QSlider::handle:horizontal:hover {
+    background: #60a5fa;
+}
+
+/* --- Основни бутони в главната лента ("Маркирай и преведи", "Изчисти") ---
+   Бутоните имат фиксирана пикселна ширина (виж setup_buttons() в
+   main_window.py) - padding и font-size са нарочно малки, за да се
+   събира и най-дългият надпис ("Изчистване") без да се реже. */
+QPushButton#primary_btn,
+QPushButton#secondary_btn {
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 2px 4px;
+    font-weight: 600;
+    font-size: 12px;
+}
+QPushButton#primary_btn {
+    background-color: rgba(59, 130, 246, 210);
+}
+QPushButton#primary_btn:hover {
+    background-color: rgba(59, 130, 246, 255);
+}
+QPushButton#primary_btn:pressed {
+    background-color: rgba(37, 99, 235, 255);
+}
+
+QPushButton#secondary_btn {
+    background-color: rgba(75, 85, 99, 200);
+}
+QPushButton#secondary_btn:hover {
+    background-color: rgba(107, 114, 128, 230);
+}
+QPushButton#secondary_btn:pressed {
+    background-color: rgba(55, 65, 81, 255);
+}
+
+/* --- Бутони в диалозите (напр. "Запази" в Settings, "OK" в About) --- */
+QDialog QPushButton {
+    background-color: rgba(59, 130, 246, 210);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: 600;
+    font-size: 13px;
+}
+QDialog QPushButton:hover {
+    background-color: rgba(59, 130, 246, 255);
+}
+QDialog QPushButton:pressed {
+    background-color: rgba(37, 99, 235, 255);
+}
+QDialog QPushButton:disabled {
+    background-color: rgba(59, 130, 246, 70);
+    color: rgba(255, 255, 255, 110);
+}
+
+/* --- Икон-бутони (изход, настройки, инфо, местене, око) --- */
+QToolButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 15px;
+}
+QToolButton:hover {
+    background-color: rgba(255, 255, 255, 35);
+}
+QToolButton:pressed {
+    background-color: rgba(255, 255, 255, 60);
+}
+
+/* --- Play бутонът принадлежи визуално към лявата редица
+   ("Маркирай и преведи", "Изчисти"), не към системните икони вдясно -
+   затова взима същия сив стил като "Изчистване" вместо голата
+   кръгла hover-иконка отгоре. ID селекторът е по-специфичен от
+   голото "QToolButton" по-горе, така че го замества изцяло. --- */
+QToolButton#secondary_icon_btn {
+    background-color: rgba(75, 85, 99, 200);
+    border: none;
+    border-radius: 6px;
+}
+QToolButton#secondary_icon_btn:hover {
+    background-color: rgba(107, 114, 128, 230);
+}
+QToolButton#secondary_icon_btn:pressed {
+    background-color: rgba(55, 65, 81, 255);
+}
+
+/* --- 3.0: "Преведи отново" е сив, докато няма маркирана област --- */
+QToolButton#secondary_icon_btn:disabled {
+    background-color: rgba(75, 85, 99, 90);
+}
+
+/* --- 3.0: бутонът "?" отваря меню (Помощ / За програмата) - без
+   стрелката, която Qt слага по подразбиране на бутони с меню. --- */
+QToolButton#menu_icon_btn::menu-indicator {
+    image: none;
+    width: 0px;
+}
+QMenu {
+    background-color: #2a2a2a;
+    color: #e5e7eb;
+    border: 1px solid rgba(90, 90, 90, 150);
+    border-radius: 6px;
+    padding: 4px;
+}
+QMenu::item {
+    padding: 6px 18px;
+    border-radius: 4px;
+}
+QMenu::item:selected {
+    background-color: #3b82f6;
+    color: white;
+}
+
+/* --- 3.0: история и превод на текст --- */
+QDialog QPlainTextEdit,
+QDialog QListWidget {
+    background-color: #2a2a2a;
+    color: #e5e7eb;
+    border: 1px solid rgba(90, 90, 90, 150);
+    border-radius: 5px;
+    padding: 4px;
+    font-size: 13px;
+    selection-background-color: #3b82f6;
+}
+QDialog QPlainTextEdit:read-only {
+    background-color: #242424;
+}
+QDialog QListWidget {
+    alternate-background-color: #303030;
+}
+QDialog QListWidget::item {
+    padding: 6px;
+}
+QDialog QListWidget::item:selected {
+    background-color: #3b82f6;
+    color: white;
+}
+
+/* --- 3.0: второстепенен бутон в диалог ("Възстанови по подразбиране") --- */
+QDialog QPushButton#secondary_dialog_btn {
+    background-color: rgba(75, 85, 99, 200);
+}
+QDialog QPushButton#secondary_dialog_btn:hover {
+    background-color: rgba(107, 114, 128, 230);
+}
+
+/* --- 3.0: второстепенен текст (статистиката в историята) --- */
+QDialog QLabel#muted_label {
+    color: #9ca3af;
+    font-size: 12px;
+}
