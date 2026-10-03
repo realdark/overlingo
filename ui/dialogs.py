@@ -5,9 +5,10 @@
 състоянието на главния прозорец, само от текстовете (i18n).
 """
 
-from utils.imports import QtWidgets, QtCore
+from utils.imports import QtWidgets, QtCore, QtGui
 from utils.version import APP_VERSION
 from core.tesseract_setup import configure_tesseract, install_hint, terminal_hint_key
+from core.update_check import STATUS_NEWER, STATUS_ERROR
 
 # Изрични ключове (не f"about_feature{i}") - за да се намират с търсене в
 # кода и тестът "всеки текст в JSON се ползва някъде" да ги вижда.
@@ -104,3 +105,30 @@ def show_tesseract_missing(parent, i18n):
             QtWidgets.QMessageBox.information(parent, t("tesseract_missing_title"), t("tesseract_command_copied"))
         else:
             return False
+
+
+def show_update_result(parent, i18n, result):
+    """
+    Резултат от "Провери за нова версия" (core.update_check.UpdateResult):
+    нова версия - "Изтегли" (отваря страницата на release-а) и OK;
+    последна версия или грешка - само OK.
+    """
+    t = i18n.tr
+    if result.status == STATUS_NEWER:
+        text = t("update_available").format(latest=result.latest_version, current=result.current_version)
+        icon = QtWidgets.QMessageBox.Information
+    elif result.status == STATUS_ERROR:
+        text = t("update_check_failed")
+        icon = QtWidgets.QMessageBox.Warning
+    else:
+        text = t("update_up_to_date").format(current=result.current_version)
+        icon = QtWidgets.QMessageBox.Information
+
+    msg = _rich_message(parent, t("update_title"), text, icon)
+    download_btn = None
+    if result.status == STATUS_NEWER:
+        download_btn = msg.addButton(t("update_download_button"), QtWidgets.QMessageBox.AcceptRole)
+    msg.addButton(QtWidgets.QMessageBox.Ok)
+    msg.exec_()
+    if download_btn is not None and msg.clickedButton() == download_btn:
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl(result.url))

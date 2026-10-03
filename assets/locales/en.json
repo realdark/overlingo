@@ -92,7 +92,7 @@
     "help_workflow_title": "Basic workflow",
     "help_workflow_body": "Click \"Select & Translate\" and drag over an area of the screen (Esc or right-click cancels). The translation appears directly over the original text or in the toolbar's text panel - depending on the \"Direct overlay translation\" setting in the \"Interface\" tab of Settings. The ⟳ button next to it translates the same area again without selecting it anew - handy for subtitles and text that changes. The overlay has buttons for copying and reading aloud. Drag the toolbar from the empty space between the buttons to move it; the \"—\" button minimizes it.",
     "help_interface_title": "Interface",
-    "help_interface_body": "\"Aa\" opens a window for translating text: type or paste text and translate with the button or Ctrl+Enter; with \"Auto-translate\" checked, the translation appears a second after you stop typing. The clock shows the translation history of the current session - any entry can be shown again, copied or read aloud; the history is not kept after the app closes. The eye hides/shows the text panel. \"Auto refresh\" re-translates on a set interval. Already-translated text is served from cache, without a new request to the service. \"Restore defaults\" in Settings resets all settings (your API key is kept).",
+    "help_interface_body": "\"Aa\" opens a window for translating text: type or paste text and translate with the button or Ctrl+Enter; with \"Auto-translate\" checked, the translation appears a second after you stop typing. The clock shows the translation history of the current session - any entry can be shown again, copied or read aloud; the history is not kept after the app closes. The eye hides/shows the text panel. \"Auto refresh\" re-translates on a set interval. Already-translated text is served from cache, without a new request to the service. \"Restore defaults\" in Settings resets all settings (your API key is kept). Under \"?\" → \"Check for updates\" the app asks GitHub whether a newer version exists and, if so, opens the download page - only when you ask; it never checks on its own.",
     "help_translation_title": "Translation services",
     "help_translation_body": "Google, DeepL and Microsoft are online services - if the primary one fails, the app automatically tries Google as a fallback. Ollama is local, offline translation, but requires a separate installation on your computer (see the notice in Settings when you select it) - the app itself does not install it for you. Additional OCR languages can be downloaded directly via the \"Download language\" button in the \"Translation\" tab of Settings.",
     "help_audio_title": "Voice playback",
@@ -167,5 +167,11 @@
     "text_auto_translate_label": "Auto-translate",
     "text_auto_translate_tooltip": "Translates on its own about a second after you stop typing. Turn it off with a paid key (DeepL, Microsoft) - every pause sends the whole text again.",
     "history_stats": "Translations this session: {translations} (from cache: {cache_hits})",
-    "history_stats_tooltip": "\"From cache\" are translations of text already translated before - no new request to the service."
+    "history_stats_tooltip": "\"From cache\" are translations of text already translated before - no new request to the service.",
+    "check_updates_menu": "Check for updates",
+    "update_title": "Updates",
+    "update_available": "A new version <b>{latest}</b> is available (you have {current}).",
+    "update_up_to_date": "You have the latest version ({current}).",
+    "update_check_failed": "Couldn't check for updates. Check your internet connection and try again.",
+    "update_download_button": "Download"
 }

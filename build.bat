@@ -1,12 +1,22 @@
 @echo off
+REM UTF-8 в конзолата - иначе българските съобщения излизат като йероглифи
+chcp 65001 >nul
 echo === Build Overlingo (onedir, Windows) ===
+
+REM Работи от папката на скрипта, независимо откъде е пуснат
+REM (%~dp0 = папката на build.bat; /d сменя и диска, ако е различен).
+cd /d "%~dp0"
 
 REM Спиране при грешка
 setlocal enabledelayedexpansion
 
 REM Версията се чете от utils\version.py - единственото място, където се сменя.
+REM Без Python (командата "python" не винаги е в PATH на Windows): редът е
+REM APP_VERSION = "3.0" - взимаме частта след "=" и махаме интервали и кавички.
 set VERSION=
-for /f "usebackq delims=" %%v in (`python -c "import runpy; print(runpy.run_path('utils/version.py')['APP_VERSION'])"`) do set VERSION=%%v
+for /f "tokens=2 delims==" %%v in ('findstr /b /c:"APP_VERSION" utils\version.py') do set VERSION=%%v
+if defined VERSION set VERSION=%VERSION: =%
+if defined VERSION set VERSION=%VERSION:"=%
 if "%VERSION%"=="" (
     echo Не мога да прочета APP_VERSION от utils\version.py
     exit /b 1

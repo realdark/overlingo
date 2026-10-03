@@ -4,6 +4,9 @@ echo "=== Build Overlingo (onedir, Linux) ==="
 # Спиране при грешка
 set -e
 
+# Работи от папката на скрипта, независимо откъде е пуснат.
+cd "$(dirname "$(readlink -f "$0")")"
+
 # Версията се чете от utils/version.py - единственото място, където се сменя.
 VERSION="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' utils/version.py)"
 if [ -z "$VERSION" ]; then

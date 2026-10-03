@@ -18,8 +18,9 @@ from core.capture import capture_full_screen_qimage, warm_up
 from ui.components import SelectionWindow, WindowDragFilter, SecondaryOverlay, OverlayPanel
 from ui.settings_dialog import SettingsDialog
 from ui.history_window import HistoryWindow
-from ui.dialogs import show_about, show_help, show_tesseract_missing
+from ui.dialogs import show_about, show_help, show_tesseract_missing, show_update_result
 from core.tesseract_setup import configure_tesseract
+from core.update_check import UpdateCheckThread
 from ui.text_translate_window import TextTranslateWindow
 from core.fullscreen_detector import FullscreenDetector
 from core.hotkey_manager import (
@@ -70,6 +71,7 @@ class MainWindow(QtWidgets.QWidget):
 
         self.history = TranslationHistory()
         self.history_window = None   # създават се при първото отваряне
+        self._update_thread = None   # проверка за нова версия (менюто "?")
         self.text_window = None
 
         self.setup_ui()
@@ -189,6 +191,7 @@ class MainWindow(QtWidgets.QWidget):
         self.minimize_btn.clicked.connect(self._minimize_window)
         self.settings_btn.clicked.connect(self.show_settings)
         self.help_action.triggered.connect(self.show_help)
+        self.check_updates_action.triggered.connect(self.check_for_updates)
         self.about_action.triggered.connect(self.show_about)
 
     def _position_translation_status(self):
@@ -298,6 +301,7 @@ class MainWindow(QtWidgets.QWidget):
         self.help_btn.setObjectName("menu_icon_btn")
         self.help_menu = QtWidgets.QMenu(self)
         self.help_action = self.help_menu.addAction("")
+        self.check_updates_action = self.help_menu.addAction("")
         self.about_action = self.help_menu.addAction("")
         self.help_btn.setMenu(self.help_menu)
         self.help_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
@@ -356,6 +360,7 @@ class MainWindow(QtWidgets.QWidget):
         self.settings_btn.setToolTip(t("settings_button_tooltip"))
         self.help_btn.setToolTip(t("help_menu_tooltip"))
         self.help_action.setText(t("help_menu_help"))
+        self.check_updates_action.setText(t("check_updates_menu"))
         self.about_action.setText(t("help_menu_about"))
         self._update_hotkey_tooltips()
         for window in (self.history_window, self.text_window):
@@ -438,6 +443,23 @@ class MainWindow(QtWidgets.QWidget):
 
     def show_help(self):
         show_help(self, self.i18n)
+
+    def check_for_updates(self):
+        """
+        "Провери за нова версия" от менюто "?". Заявката към GitHub е във
+        фонова нишка; докато тече, редът в менюто е неактивен, за да не се
+        пуснат две проверки едновременно.
+        """
+        if self._update_thread and self._update_thread.isRunning():
+            return
+        self.check_updates_action.setEnabled(False)
+        self._update_thread = UpdateCheckThread()
+        self._update_thread.result_ready.connect(self._on_update_result)
+        self._update_thread.start()
+
+    def _on_update_result(self, result):
+        self.check_updates_action.setEnabled(True)
+        show_update_result(self, self.i18n, result)
 
     # ------------------------------------------------------------------
     # Настройки
@@ -898,6 +920,8 @@ class MainWindow(QtWidgets.QWidget):
             self.text_window.wait_for_threads()
         if self.history_window:
             self.history_window.close()
+        if self._update_thread:
+            self._update_thread.wait(3000)  # нишка, унищожена докато работи, срива Qt при изход
         self.save_settings_to_file()
         self.hotkey_manager.stop()
         self._close_translation_overlay()  # иначе остава "осиротял" на екрана след затваряне
