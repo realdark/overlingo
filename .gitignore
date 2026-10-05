@@ -3,6 +3,7 @@ settings.json
 settings.json.tmp
 app.log
 app.log.*
+crash.log
 
 # Python
 __pycache__/
@@ -22,3 +23,6 @@ tesseract/
 # OS junk файлове
 .DS_Store
 Thumbs.db
+
+# Свалени модели за превод без интернет (~70 MB на двойка езици)
+argos-models/

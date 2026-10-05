@@ -7,24 +7,24 @@ from utils.config import image_path
 from core.audio_playback import AudioPlaybackToggle
 from core.fullscreen_detector import FullscreenDetector
 
+def _warn_audio_needs_internet(parent, i18n):
+    """edge-tts е онлайн услуга - без връзка озвучаването не може да проработи."""
+    QtWidgets.QMessageBox.warning(parent, i18n.tr("warning_title"), i18n.tr("audio_requires_internet"))
+
+
 class OverlayPanel(QtWidgets.QWidget):
     """Панел с полупрозрачен фон и заоблени ъгли за основния прозорец."""
 
-    def __init__(self, alpha=200, radius=8, color=QtGui.QColor(0, 0, 0), parent=None):
-        super().__init__(parent)
-        self._alpha = int(alpha)
-        self._radius = radius
-        self._color = QtGui.QColor(color)
-        self._color.setAlpha(self._alpha)
+    RADIUS = 8
 
-        # за истинска прозрачност
-        # self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
-        # self.setAttribute(QtCore.Qt.WA_NoSystemBackground, True)
+    def __init__(self, alpha=200, parent=None):
+        super().__init__(parent)
+        self._color = QtGui.QColor(0, 0, 0)
+        self.set_alpha(alpha)
 
     def set_alpha(self, a: int):
         """Задава ниво на прозрачност (0-255)."""
-        self._alpha = max(0, min(255, int(a)))
-        self._color.setAlpha(self._alpha)
+        self._color.setAlpha(max(0, min(255, int(a))))
         self.update()
 
     def paintEvent(self, e):
@@ -33,12 +33,11 @@ class OverlayPanel(QtWidgets.QWidget):
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(QtCore.Qt.NoPen)
         p.setBrush(self._color)
-        p.drawRoundedRect(self.rect(), self._radius, self._radius)
+        p.drawRoundedRect(self.rect(), self.RADIUS, self.RADIUS)
 
 class SelectionWindow(QtWidgets.QWidget):
+    # Escape или десен бутон затварят прозореца без сигнал - нищо не се превежда.
     selection_made = QtCore.pyqtSignal(QtCore.QRect)
-    # Escape или десен бутон - маркирането е отказано, нищо не се превежда
-    cancelled = QtCore.pyqtSignal()
 
     def __init__(self, screenshot, hint_text=""):
         super().__init__()
@@ -68,7 +67,6 @@ class SelectionWindow(QtWidgets.QWidget):
 
     def _cancel(self):
         self.selecting = False
-        self.cancelled.emit()
         self.close()
 
     def paintEvent(self, event):
@@ -149,13 +147,13 @@ class WindowDragFilter(QtCore.QObject):
 class SecondaryOverlay(QtWidgets.QFrame):
     closed = QtCore.pyqtSignal()
 
-    def __init__(self, text, _current_translated_text, rect, font_size=14, font_color="#FFFFFF", background_opacity=200, audio_lang="", audio_speed=1.0, i18n=None):
+    def __init__(self, text, rect, i18n, font_size=14, font_color="#FFFFFF", background_opacity=200, audio_lang="", audio_speed=1.0):
         super().__init__()
 
         self.audio_lang = audio_lang
         self.audio_speed = audio_speed
         self.i18n = i18n
-        self._current_translated_text = _current_translated_text
+        self._current_translated_text = text  # за "Копирай" и "Чети на глас"; сменя се в setText()
         self._audio = AudioPlaybackToggle(
             set_icon=self._set_play_button_icon, on_no_internet=self._on_audio_no_internet
         )
@@ -255,10 +253,7 @@ class SecondaryOverlay(QtWidgets.QFrame):
 
     def adjust_size(self):
         """Автоматично оразмерява прозореца според съдържанието"""
-        # Пресмятаме необходимата височина за текста
-        self.text_label.setText(self.text_label.text())
-
-        # ✅ ПОПРАВЕНО: Използваме правилния метод за изчисляване на височина
+        # Необходимата височина за текста при дадената ширина
         text_width = self.original_rect.width() - 20  # Вадим padding
         text_height = self.text_label.heightForWidth(text_width) - 20  # Добавяме малко padding
 
@@ -295,9 +290,6 @@ class SecondaryOverlay(QtWidgets.QFrame):
         self.play_btn.move(self.width() - 90, final_height - 45)
         self.close_btn.move(self.width() - 45, final_height - 45)
 
-        # ✅ Презареждаме текста за правилно показване
-        self.text_label.setText(self.text_label.text())
-
     def setText(self, text):
         """Променя текста и автоматично оразмерява прозореца"""
         self.text_label.setText(text)
@@ -317,9 +309,7 @@ class SecondaryOverlay(QtWidgets.QFrame):
         QtWidgets.QApplication.clipboard().setText(self._current_translated_text)
 
     def _on_audio_no_internet(self):
-        """edge-tts е онлайн услуга - без връзка озвучаването не може да проработи."""
-        message = self.i18n.tr("audio_requires_internet") if self.i18n else "Audio requires internet"
-        QtWidgets.QMessageBox.warning(self, self.i18n.tr("warning_title") if self.i18n else "Warning", message)
+        _warn_audio_needs_internet(self, self.i18n)
 
     def closeEvent(self, event):
         self.fullscreen_detector.stop()
@@ -365,9 +355,7 @@ class AudioButton(QtWidgets.QPushButton):
         self._set_icon("stop_button.png" if self._audio.is_playing() else "play_button.png")
 
     def _on_no_internet(self):
-        QtWidgets.QMessageBox.warning(
-            self.window(), self.i18n.tr("warning_title"), self.i18n.tr("audio_requires_internet")
-        )
+        _warn_audio_needs_internet(self.window(), self.i18n)
 
 
 class CopyButton(QtWidgets.QPushButton):

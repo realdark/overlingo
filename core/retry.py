@@ -50,14 +50,12 @@ def retry_with_backoff(func, max_attempts=3, base_delay=1.0, max_delay=8.0, labe
     опитва пак.
     """
     delay = base_delay
-    last_error = None
     prefix = f"[{label}] " if label else ""
 
     for attempt in range(1, max_attempts + 1):
         try:
             return func()
         except Exception as e:
-            last_error = e
             if attempt >= max_attempts or not is_retryable_error(e):
                 if attempt > 1:
                     logger.error(f"{prefix}Изчерпани опити ({attempt}/{max_attempts}): {e}")
@@ -69,5 +67,3 @@ def retry_with_backoff(func, max_attempts=3, base_delay=1.0, max_delay=8.0, labe
             )
             time.sleep(min(wait, max_delay))
             delay *= 2
-
-    raise last_error

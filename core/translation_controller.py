@@ -17,12 +17,10 @@ from utils.logging_setup import logger
 from core.capture import capture_region_as_gray, CaptureError
 from core.translations import TranslationThread
 
-DEFAULT_TIMEOUT_MS = 25_000  # резервна стойност - реално идва от Settings ("Timeout за превод")
-
 
 class TranslationController(QtCore.QObject):
-    # source_text, translated_text, from_cache, used_fallback, font_size (0 = не е мерен), rect
-    translation_finished = pyqtSignal(str, str, bool, bool, int, object)
+    # source_text, translated_text, from_cache, fallback_used (""/"google"/"offline"), font_size (0 = не е мерен), rect
+    translation_finished = pyqtSignal(str, str, bool, str, int, object)
     # error_key (ключ за превод в locales, напр. "screenshot_error",
     # "translation_timeout", "translation_error"), detail (технически детайл
     # или празно), source_text (разпознатият текст, ако OCR е минал)
@@ -32,12 +30,13 @@ class TranslationController(QtCore.QObject):
     # (потенциално продължителен) цикъл OCR+превод да завърши.
     capture_finished = pyqtSignal()
 
-    def __init__(self, translation_cache, timeout_ms=DEFAULT_TIMEOUT_MS):
+    def __init__(self, translation_cache, timeout_ms):
         super().__init__()
         self.cache = translation_cache
+        # Попълват се от configure() веднага след създаването.
         self.translator = None
-        self.ocr_lang = "eng"
-        self.target_lang = "BG"
+        self.ocr_lang = None
+        self.target_lang = None
         self.timeout_ms = timeout_ms
         self._thread = None
         self._generation = 0
@@ -82,8 +81,8 @@ class TranslationController(QtCore.QObject):
             detect_font_size=detect_font_size,
         )
         self._thread.finished_signal.connect(
-            lambda source_text, translated_text, from_cache, used_fallback, font_size: self._on_finished(
-                my_generation, source_text, translated_text, from_cache, used_fallback, font_size, rect
+            lambda source_text, translated_text, from_cache, fallback_used, font_size: self._on_finished(
+                my_generation, source_text, translated_text, from_cache, fallback_used, font_size, rect
             )
         )
         self._thread.failed_signal.connect(
@@ -109,7 +108,7 @@ class TranslationController(QtCore.QObject):
         self._watchdog.stop()
         self.translation_failed.emit(error_key, detail, source_text)
 
-    def _on_finished(self, generation, source_text, translated_text, from_cache, used_fallback,
+    def _on_finished(self, generation, source_text, translated_text, from_cache, fallback_used,
                       font_size, rect):
         if generation != self._generation:
             logger.info("Резултат от превод пристигна след timeout - игнориран.")
@@ -117,5 +116,5 @@ class TranslationController(QtCore.QObject):
 
         self._watchdog.stop()
         self.translation_finished.emit(
-            source_text, translated_text, from_cache, used_fallback, font_size, rect
+            source_text, translated_text, from_cache, fallback_used, font_size, rect
         )

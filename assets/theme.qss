@@ -148,6 +148,10 @@ QPushButton#secondary_btn:hover {
 QPushButton#secondary_btn:pressed {
     background-color: rgba(55, 65, 81, 255);
 }
+QPushButton#secondary_btn:disabled {
+    background-color: rgba(75, 85, 99, 90);
+    color: rgba(255, 255, 255, 110);
+}
 
 /* --- Бутони в диалозите (напр. "Запази" в Settings, "OK" в About) --- */
 QDialog QPushButton {

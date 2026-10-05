@@ -13,7 +13,7 @@ Microsoft), които броят знаци: всяка пауза праща �
 """
 
 from utils.imports import QtWidgets, QtCore, QtGui
-from core.translations import TextTranslationThread
+from core.translations import TextTranslationThread, fallback_notice_key
 from ui.components import AudioButton, CopyButton
 
 AUTO_TRANSLATE_DELAY_MS = 1000
@@ -161,18 +161,22 @@ class TextTranslateWindow(QtWidgets.QDialog):
         self._threads.add(thread)
         thread.start()
 
-    def _on_finished(self, request_id, source, translation, from_cache, used_fallback):
+    def _on_finished(self, request_id, source, translation, from_cache, fallback_used):
         if request_id != self._request_id:
             return  # текстът е сменен, докато чакахме - този резултат е остарял
         self.output_edit.setPlainText(translation)
-        self.status_label.setText(f"⚠ {self.i18n.tr('fallback_notice')}" if used_fallback else "")
+        self.status_label.setText(f"⚠ {self.i18n.tr(fallback_notice_key(fallback_used))}" if fallback_used else "")
         self._update_output_buttons()
         self._on_translated(source, translation, from_cache)
 
     def _on_failed(self, request_id, error_key, detail):
         if request_id != self._request_id:
             return
-        self.status_label.setText(f"❌ {self.i18n.tr(error_key)}")
+        message = f"❌ {self.i18n.tr(error_key)}"
+        if error_key == "argos_model_missing" and detail:
+            # Текстът завършва с "...за" - без двойката ("en → bg") е непълен.
+            message = f"{message} {detail}"
+        self.status_label.setText(message)
         self.status_label.setToolTip(detail)
 
     def _update_output_buttons(self):

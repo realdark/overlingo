@@ -42,7 +42,16 @@ pyinstaller --onedir --noconsole \
   --hidden-import=pynput \
   --hidden-import=pynput.keyboard \
   --hidden-import=pynput.keyboard._xorg \
+  --collect-all ctranslate2 \
+  --exclude-module torch \
+  --exclude-module transformers \
+  --exclude-module tensorflow \
+  --collect-all sentencepiece \
   main.py
+  # ctranslate2/sentencepiece - превод без интернет (core/argos.py). Внасят
+  # се чак при нужда (вътре във функция), а носят и собствени native
+  # библиотеки - --collect-all взима всичко, за да не липсва .so в билда.
+  # --exclude-module: ctranslate2 по желание ползва torch - не го прибираме.
   # pynput се внася от core/hotkey_manager.py - PyInstaller го засича
   # статично. Hotkey функцията е активна на Linux само под X11 сесия
   # (HOTKEY_SUPPORTED проверка - виж core/hotkey_manager.py), не под

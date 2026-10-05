@@ -29,6 +29,31 @@ class SettingsManagerTest(unittest.TestCase):
         self.assertEqual(settings["text_size"], 20)
         self.assertEqual(settings["ocr_lang"], DEFAULT_SETTINGS["ocr_lang"])
 
+    def test_old_ollama_settings_are_migrated(self):
+        self.path.write_text(json.dumps({
+            "translation_api": "ollama", "ollama_model": "llama3.2", "ollama_url": "http://localhost:11434",
+        }), encoding="utf-8")
+        settings = self.manager.load()
+        self.assertEqual(settings["translation_api"], "google")
+        self.assertNotIn("ollama_model", settings)
+        self.assertNotIn("ollama_url", settings)
+
+    def test_offline_translation_needs_libraries_and_models(self):
+        settings = dict(DEFAULT_SETTINGS, translation_api="argos", ocr_lang="eng", target_lang="BG")
+        with mock.patch.object(settings_manager.argos, "libraries_available", return_value=False):
+            with self.assertRaises(SettingsValidationError) as ctx:
+                self.manager.validate(settings)
+            self.assertEqual(ctx.exception.message_key, "argos_not_installed")
+        with mock.patch.object(settings_manager.argos, "libraries_available", return_value=True), \
+             mock.patch.object(settings_manager.argos, "installed_pairs", return_value=set()):
+            with self.assertRaises(SettingsValidationError) as ctx:
+                self.manager.validate(settings)
+            self.assertEqual(ctx.exception.message_key, "argos_models_needed")
+            self.assertEqual(ctx.exception.detail, "en → bg")
+        with mock.patch.object(settings_manager.argos, "libraries_available", return_value=True), \
+             mock.patch.object(settings_manager.argos, "installed_pairs", return_value={("en", "bg")}):
+            self.manager.validate(settings)  # без грешка
+
     def test_corrupted_file_falls_back_to_defaults(self):
         self.path.write_text("{ not json", encoding="utf-8")
         self.assertEqual(self.manager.load(), DEFAULT_SETTINGS)

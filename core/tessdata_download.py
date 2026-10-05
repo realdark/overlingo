@@ -27,15 +27,12 @@ class TessdataDownloadThread(QThread):
     finished_download = pyqtSignal(bool, str, object)
 
     def __init__(self, lang_code, dest_path):
+        """lang_code - вече почистен от диалога (малки букви, без интервали, не празен)."""
         super().__init__()
-        self.lang_code = lang_code.strip().lower()
+        self.lang_code = lang_code
         self.dest_path = dest_path
 
     def run(self):
-        if not self.lang_code:
-            self.finished_download.emit(False, "tessdata_err_no_code", {})
-            return
-
         response = None
         try:
             for branch in TESSDATA_FAST_BRANCHES:

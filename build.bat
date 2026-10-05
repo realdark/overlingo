@@ -27,6 +27,30 @@ if exist build rmdir /s /q build
 if exist dist rmdir /s /q dist
 if exist overlingo.spec del /q overlingo.spec
 
+REM PyQt5 носи стар msvcp140.dll, с който ctranslate2/sentencepiece падат
+REM (и PyInstaller при билда) - tools\fix_qt_runtime.py го сменя със системния.
+REM Python-ът е този, на който е pyinstaller (командата "python" може да е
+REM само пряк път към Microsoft Store): ...\Scripts\pyinstaller.exe ->
+REM ...\Scripts\python.exe (venv) или ...\python.exe (обикновена инсталация).
+set PY=
+for /f "delims=" %%p in ('where pyinstaller 2^>nul') do (
+    if not defined PY if exist "%%~dpppython.exe" set "PY=%%~dpppython.exe"
+    if not defined PY if exist "%%~dpp..\python.exe" set "PY=%%~dpp..\python.exe"
+)
+if not defined PY (
+    where py >nul 2>nul && set PY=py
+)
+if defined PY (
+    "%PY%" tools\fix_qt_runtime.py
+    if errorlevel 1 (
+        echo.
+        echo === BUILD FAILED ===
+        exit /b 1
+    )
+) else (
+    echo Не намерих Python - пропускам tools\fix_qt_runtime.py
+)
+
 set ICON=assets\icons\app_icon.ico
 
 pyinstaller --onedir --noconsole ^
@@ -47,6 +71,11 @@ pyinstaller --onedir --noconsole ^
   --hidden-import=pynput ^
   --hidden-import=pynput.keyboard ^
   --hidden-import=pynput.keyboard._win32 ^
+  --collect-all ctranslate2 ^
+  --exclude-module torch ^
+  --exclude-module transformers ^
+  --exclude-module tensorflow ^
+  --collect-all sentencepiece ^
   main.py
 
 if errorlevel 1 (

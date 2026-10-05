@@ -1,111 +1,112 @@
-from utils.imports import sys, QtCore, QtWidgets
+"""
+ПОКАЗВАНЕ НАД ПРИЛОЖЕНИЯ НА ЦЯЛ ЕКРАН (само Linux/X11)
+
+Под X11 прозорец "винаги отгоре" не стои над приложение на цял екран
+(игра, видео). Ако такова е активно, прозорецът получава флага
+X11BypassWindowManagerHint и тогава се вижда. На всяка секунда се
+проверява дали нещо е на цял екран и флаговете се сменят при нужда.
+
+Проверката (xprop) е обща за всички прозорци и се пази за около секунда -
+лентата и overlay-ят не пускат всеки свои процеси. Ако xprop липсва
+(напр. под Wayland), повече не се опитва и се приема, че няма приложение на
+цял екран. (Резервна проверка през Qt няма смисъл: QApplication вижда само
+собствените ни прозорци, т.е. би "засякла" само прозореца за маркиране.)
+"""
+
+import subprocess
+import time
+
+from utils.imports import sys, QtCore
 from utils.logging_setup import logger
 
+IS_LINUX = sys.platform.startswith("linux")
+CHECK_INTERVAL_MS = 1000
+_CACHE_SECONDS = 0.9
+
+
 class FullscreenDetector(QtCore.QObject):
-    """Клас за откриване на fullscreen приложения и управление на флаговете"""
+    """Следи дали има приложение на цял екран и сменя флаговете на прозореца-родител."""
+
+    _cached_active = False
+    _cached_at = 0.0
+    _xprop_available = True
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.x11_bypass_applied = False
-
-        # Автоматично обновяване за Linux
-        if sys.platform == "linux":
+        self.update_timer = None
+        if IS_LINUX:
             self.update_timer = QtCore.QTimer(self)
             self.update_timer.timeout.connect(self._auto_update_check)
-            self.update_timer.start(1000)  # Проверка на всеки 1 секунда
+            self.update_timer.start(CHECK_INTERVAL_MS)
 
     def stop(self):
         """
-        Спира авто-проверката. ЗАДЪЛЖИТЕЛНО се вика, когато прозорецът,
-        към който детекторът е прикачен, се затваря - иначе таймерът
-        продължава да тиктака върху скрит widget и рано или късно пак
-        го показва чрез _auto_update_check() -> self.parent().show().
+        Спира проверката. ЗАДЪЛЖИТЕЛНО се вика, когато прозорецът-родител се
+        затваря - иначе таймерът продължава върху скрит прозорец.
         """
-        if hasattr(self, "update_timer"):
+        if self.update_timer:
             self.update_timer.stop()
 
-    def is_fullscreen_application_active(self):
-        """Проверява дали има активен fullscreen прозорец"""
-        if sys.platform != "linux":
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def is_fullscreen_application_active(cls):
+        """Има ли активен прозорец на цял екран. Резултатът се пази ~1 s за всички прозорци."""
+        if not IS_LINUX:
+            return False
+        now = time.monotonic()
+        if now - cls._cached_at < _CACHE_SECONDS:
+            return cls._cached_active
+        cls._cached_active = cls._check_with_xprop() if cls._xprop_available else False
+        cls._cached_at = now
+        return cls._cached_active
+
+    @classmethod
+    def _check_with_xprop(cls):
+        try:
+            result = subprocess.run(["xprop", "-root", "_NET_ACTIVE_WINDOW"],
+                                    capture_output=True, text=True, timeout=2)
+            if result.returncode != 0:
+                return False
+            window_id = result.stdout.strip().split()[-1]
+            if window_id == "0x0":
+                return False
+            result = subprocess.run(["xprop", "-id", window_id, "_NET_WM_STATE"],
+                                    capture_output=True, text=True, timeout=2)
+            return "_NET_WM_STATE_FULLSCREEN" in result.stdout
+        except FileNotFoundError:
+            logger.info("xprop липсва - показването над приложения на цял екран е изключено.")
+            cls._xprop_available = False
+            return False
+        except Exception:
             return False
 
-        try:
-            # Метод 1: Проверка с xprop
-            import subprocess
-            result = subprocess.run(['xprop', '-root', '_NET_ACTIVE_WINDOW'],
-                                  capture_output=True, text=True, timeout=2)
+    # ------------------------------------------------------------------
 
-            if result.returncode == 0:
-                window_id = result.stdout.strip().split()[-1]
-                if window_id != '0x0':
-                    result = subprocess.run(['xprop', '-id', window_id, '_NET_WM_STATE'],
-                                          capture_output=True, text=True, timeout=2)
-                    return '_NET_WM_STATE_FULLSCREEN' in result.stdout
-
-        except Exception:
-            # Метод 2: Опростена проверка по размер
-            try:
-                active_window = QtWidgets.QApplication.activeWindow()
-                if active_window and active_window != self.parent():
-                    screen = QtWidgets.QApplication.primaryScreen().geometry()
-                    window_geometry = active_window.geometry()
-
-                    return (window_geometry.width() >= screen.width() * 0.95 and
-                           window_geometry.height() >= screen.height() * 0.95)
-            except Exception:
-                pass
-
-        return False
+    def _desired_flags(self, base_flags):
+        if self.is_fullscreen_application_active():
+            return base_flags | QtCore.Qt.X11BypassWindowManagerHint
+        return base_flags
 
     def apply_window_flags(self, window, base_flags):
-        """Прилага подходящите флагове според fullscreen статуса"""
-        if sys.platform == "linux":
-            try:
-                if self.is_fullscreen_application_active():
-                    # Добави X11Bypass за fullscreen приложения
-                    new_flags = base_flags | QtCore.Qt.X11BypassWindowManagerHint
-                    window.setWindowFlags(new_flags)
-                    self.x11_bypass_applied = True
-                    return new_flags
-                else:
-                    # Стандартни флагове за нормален режим
-                    window.setWindowFlags(base_flags)
-                    self.x11_bypass_applied = False
-                    return base_flags
-            except Exception as e:
-                logger.error(f"Fullscreen detector error: {e}", exc_info=True)
-                window.setWindowFlags(base_flags)
-                return base_flags
-        else:
-            # За не-Linux системи - стандартни флагове
-            window.setWindowFlags(base_flags)
-            return base_flags
+        """Задава началните флагове на прозореца (вика се при създаването му)."""
+        window.setWindowFlags(self._desired_flags(base_flags))
 
     def _auto_update_check(self):
-        """Автоматично обновява флаговете при промяна на fullscreen статуса"""
-        if self.parent() and hasattr(self.parent(), 'windowFlags'):
-            try:
-                # Ако прозорецът е минимизиран (потребителят го е скрил
-                # нарочно), НЕ пипаме нищо - иначе self.parent().show()
-                # по-долу би го възстановил насила, само защото
-                # детекторът преприлага флагове заради fullscreen статус
-                # (напр. собствения ни SelectionWindow, засечен погрешно
-                # като "чуждо fullscreen приложение"), без връзка с
-                # решението на потребителя да го минимизира.
-                if hasattr(self.parent(), 'isMinimized') and self.parent().isMinimized():
-                    return
-
-                # Вземи текущите флагове (без X11Bypass за сравнение)
-                current_flags = self.parent().windowFlags()
-                base_flags = current_flags & ~QtCore.Qt.X11BypassWindowManagerHint
-
-                # Принови флаговете според текущия статус
-                new_flags = self.apply_window_flags(self.parent(), base_flags)
-
-                # Ако флаговете са се променили, прерисувай прозореца
-                if current_flags != new_flags:
-                    self.parent().setWindowFlags(new_flags)
-                    self.parent().show()  # Прерисуване
-
-            except Exception as e:
-                logger.error(f"Auto-update error: {e}", exc_info=True)
+        """На всяка секунда: сменя флаговете само ако статусът "цял екран" се е променил."""
+        window = self.parent()
+        if window is None:
+            return
+        # Скрит или минимизиран прозорец не се пипа - show() по-долу би го
+        # показал насила (напр. overlay-я, скрит за момента на screenshot-а,
+        # или лентата, минимизирана от потребителя).
+        if not window.isVisible() or window.isMinimized():
+            return
+        try:
+            current = window.windowFlags()
+            desired = self._desired_flags(current & ~QtCore.Qt.X11BypassWindowManagerHint)
+            if desired != current:
+                window.setWindowFlags(desired)
+                window.show()  # setWindowFlags скрива прозореца
+        except Exception as e:
+            logger.error(f"Auto-update error: {e}", exc_info=True)

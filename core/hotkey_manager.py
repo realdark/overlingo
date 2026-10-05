@@ -32,13 +32,9 @@ IS_LINUX_X11 = sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_
 HOTKEY_SUPPORTED = IS_WINDOWS or IS_LINUX_X11
 
 
-# Действия, които могат да имат hotkey. Стойността е ключът в настройките.
+# Действия, които могат да имат hotkey.
 ACTION_MARK_TRANSLATE = "mark_translate"
 ACTION_RETRANSLATE = "retranslate"
-HOTKEY_SETTING_KEYS = {
-    ACTION_MARK_TRANSLATE: "hotkey_combo",
-    ACTION_RETRANSLATE: "hotkey_retranslate_combo",
-}
 
 
 def format_combo(combo):

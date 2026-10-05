@@ -6,7 +6,6 @@ from core.translations import (
     FallbackTranslator,
     GoogleTranslator,
     MicrosoftTranslator,
-    OllamaTranslator,
     TranslationCache,
     TranslationThread,
     create_translator,
@@ -16,21 +15,35 @@ from core.translations import (
 class TranslationCacheTest(unittest.TestCase):
     def test_miss_then_hit(self):
         cache = TranslationCache()
-        self.assertIsNone(cache.get("Hello"))
-        cache.put("Hello", "Здравей")
-        self.assertEqual(cache.get("Hello"), "Здравей")
-        self.assertEqual((cache.hits, cache.misses), (1, 1))
+        self.assertIsNone(cache.get("Hello", "BG"))
+        cache.put("Hello", "Здравей", "BG")
+        self.assertEqual(cache.get("Hello", "BG"), "Здравей")
 
     def test_whitespace_and_case_are_ignored(self):
         cache = TranslationCache()
-        cache.put("Hello   World", "Здравей, свят")
-        self.assertEqual(cache.get("  hello\nworld "), "Здравей, свят")
+        cache.put("Hello   World", "Здравей, свят", "BG")
+        self.assertEqual(cache.get("  hello\nworld ", "bg"), "Здравей, свят")
+
+    def test_target_language_is_part_of_the_key(self):
+        cache = TranslationCache()
+        cache.put("Hello", "Здравей", "BG")
+        self.assertIsNone(cache.get("Hello", "DE"))  # иначе след смяна на езика излиза старият превод
+
+    def test_oldest_unused_entry_is_dropped(self):
+        cache = TranslationCache(max_items=2)
+        cache.put("a", "1", "BG")
+        cache.put("b", "2", "BG")
+        cache.get("a", "BG")          # "a" е ползван наскоро
+        cache.put("c", "3", "BG")     # препълване - отпада "b"
+        self.assertEqual(cache.get("a", "BG"), "1")
+        self.assertIsNone(cache.get("b", "BG"))
+        self.assertEqual(len(cache.cache), 2)
 
     def test_clear(self):
         cache = TranslationCache()
-        cache.put("a", "b")
+        cache.put("a", "b", "BG")
         cache.clear()
-        self.assertIsNone(cache.get("a"))
+        self.assertIsNone(cache.get("a", "BG"))
 
 
 class _Fixed:
@@ -49,32 +62,62 @@ class FallbackTranslatorTest(unittest.TestCase):
         primary, fallback = _Fixed("primary"), _Fixed("fallback")
         translator = FallbackTranslator(primary, fallback)
         self.assertEqual(translator.translate("x", "BG"), "primary")
-        self.assertFalse(translator.used_fallback)
+        self.assertEqual(translator.fallback_used, "")
         self.assertEqual(fallback.calls, 0)
 
     def test_switches_to_fallback_on_error(self):
         translator = FallbackTranslator(_Fixed(error=RuntimeError("down")), _Fixed("fallback"))
         self.assertEqual(translator.translate("x", "BG"), "fallback")
-        self.assertTrue(translator.used_fallback)
+        self.assertEqual(translator.fallback_used, "google")
 
-    def test_used_fallback_resets_on_next_call(self):
+    def test_fallback_used_resets_on_next_call(self):
         primary = _Fixed(error=RuntimeError("down"))
         translator = FallbackTranslator(primary, _Fixed("fallback"))
         translator.translate("x", "BG")
         primary.error = None
         primary.result = "primary"
         translator.translate("x", "BG")
-        self.assertFalse(translator.used_fallback)
+        self.assertEqual(translator.fallback_used, "")
 
     def test_without_fallback_error_is_raised(self):
         translator = FallbackTranslator(_Fixed(error=RuntimeError("down")), None)
         with self.assertRaises(RuntimeError):
             translator.translate("x", "BG")
 
+    def test_no_internet_uses_offline_translation(self):
+        offline, google = _Fixed("без интернет"), _Fixed("google")
+        translator = FallbackTranslator(_Fixed(error=translations.NoInternetError("x")), google, offline)
+        self.assertEqual(translator.translate("x", "BG"), "без интернет")
+        self.assertEqual(translator.fallback_used, "offline")
+        self.assertEqual(google.calls, 0)  # без интернет Google също не би сработил
+
+    def test_no_internet_without_offline_models_reports_no_internet(self):
+        offline = _Fixed(error=translations.ArgosModelMissingError("en → bg"))
+        translator = FallbackTranslator(_Fixed(error=translations.NoInternetError("x")), _Fixed("g"), offline)
+        with self.assertRaises(translations.NoInternetError):
+            translator.translate("x", "BG")
+
+    def test_other_errors_still_go_to_google(self):
+        translator = FallbackTranslator(_Fixed(error=RuntimeError("HTTP 500")), _Fixed("google"), _Fixed("offline"))
+        self.assertEqual(translator.translate("x", "BG"), "google")
+        self.assertEqual(translator.fallback_used, "google")
+
+    def test_fallback_state_is_per_thread(self):
+        import threading
+        translator = FallbackTranslator(_Fixed(error=RuntimeError("down")), _Fixed("google"))
+        translator.translate("x", "BG")
+        seen = []
+        worker = threading.Thread(target=lambda: seen.append(translator.fallback_used))
+        worker.start()
+        worker.join()
+        self.assertEqual(seen, [""])  # другата нишка не вижда резултата на тази
+        self.assertEqual(translator.fallback_used, "google")
+
 
 class CreateTranslatorTest(unittest.TestCase):
     def test_google_has_no_extra_fallback(self):
-        self.assertIsInstance(create_translator("google"), GoogleTranslator)
+        with mock.patch.object(translations, "libraries_available", return_value=False):
+            self.assertIsInstance(create_translator("google"), GoogleTranslator)
 
     def test_paid_service_without_key_gives_none(self):
         self.assertIsNone(create_translator("deepl", ""))
@@ -86,14 +129,21 @@ class CreateTranslatorTest(unittest.TestCase):
         self.assertIsInstance(translator.primary, MicrosoftTranslator)
         self.assertIsInstance(translator.fallback, GoogleTranslator)
 
+    def test_offline_fallback_only_when_libraries_are_installed(self):
+        with mock.patch.object(translations, "libraries_available", return_value=True):
+            translator = create_translator("google", source_lang="de")
+            self.assertIsInstance(translator.offline, translations.ArgosTranslator)
+            self.assertEqual(translator.offline.source_lang, "de")
+            self.assertIsNone(translator.fallback)  # Google не пада към себе си
+        with mock.patch.object(translations, "libraries_available", return_value=False):
+            self.assertIsNone(create_translator("deepl", "key").offline)
+
     def test_fallback_can_be_disabled(self):
         self.assertIsInstance(create_translator("microsoft", "key", enable_fallback=False), MicrosoftTranslator)
 
-    def test_ollama_never_falls_back_to_cloud(self):
-        translator = create_translator("ollama", ollama_model="qwen", ollama_url="http://host:1/")
-        self.assertIsInstance(translator, OllamaTranslator)
-        self.assertEqual(translator.model, "qwen")
-        self.assertEqual(translator.base_url, "http://host:1")
+    def test_offline_service_never_falls_back_to_cloud(self):
+        translator = create_translator("argos", source_lang="en")
+        self.assertIsInstance(translator, translations.ArgosTranslator)
 
     def test_unknown_service_gives_none(self):
         self.assertIsNone(create_translator("nope"))
@@ -162,47 +212,43 @@ class TranslateWithCacheTest(unittest.TestCase):
     def test_first_call_translates_and_fills_cache(self):
         cache, translator = TranslationCache(), _Fixed("Здравей")
         self.assertEqual(translations.translate_with_cache(translator, "Hello", "BG", cache),
-                         ("Здравей", False, False))
-        self.assertEqual(cache.get("hello"), "Здравей")
+                         ("Здравей", False, ""))
+        self.assertEqual(cache.get("hello", "BG"), "Здравей")
 
     def test_second_call_comes_from_cache(self):
         cache, translator = TranslationCache(), _Fixed("Здравей")
         translations.translate_with_cache(translator, "Hello", "BG", cache)
         self.assertEqual(translations.translate_with_cache(translator, "Hello", "BG", cache),
-                         ("Здравей", True, False))
+                         ("Здравей", True, ""))
         self.assertEqual(translator.calls, 1)
 
     def test_reports_fallback(self):
         translator = FallbackTranslator(_Fixed(error=RuntimeError("down")), _Fixed("резерва"))
-        self.assertEqual(translations.translate_with_cache(translator, "x", "BG"), ("резерва", False, True))
+        self.assertEqual(translations.translate_with_cache(translator, "x", "BG"), ("резерва", False, "google"))
+
+    def test_offline_translation_is_not_cached(self):
+        cache = TranslationCache()
+        translator = FallbackTranslator(_Fixed(error=translations.NoInternetError("x")), None, _Fixed("офлайн"))
+        self.assertEqual(translations.translate_with_cache(translator, "x", "BG", cache), ("офлайн", False, "offline"))
+        self.assertIsNone(cache.get("x", "BG"))
+
+    def test_notice_keys(self):
+        self.assertEqual(translations.fallback_notice_key("google"), "fallback_notice")
+        self.assertEqual(translations.fallback_notice_key("offline"), "offline_notice")
 
     def test_errors_are_not_cached(self):
         cache = TranslationCache()
         with self.assertRaises(RuntimeError):
             translations.translate_with_cache(_Fixed(error=RuntimeError("down")), "x", "BG", cache)
-        self.assertEqual(cache.cache, {})
+        self.assertEqual(len(cache.cache), 0)
 
 
 class ErrorKeyTest(unittest.TestCase):
     def test_known_errors_get_their_own_message(self):
         self.assertEqual(translations.error_key_for(translations.NoInternetError("x")), ("no_internet", ""))
-        self.assertEqual(translations.error_key_for(translations.OllamaUnavailableError("http://h:1")),
-                         ("ollama_unavailable", "http://h:1"))
+        self.assertEqual(translations.error_key_for(translations.ArgosModelMissingError("en → bg")),
+                         ("argos_model_missing", "en → bg"))
         self.assertEqual(translations.error_key_for(RuntimeError("HTTP 500")), ("translation_error", "HTTP 500"))
-
-    def test_ollama_not_running(self):
-        with mock.patch.object(translations.requests, "post",
-                               side_effect=translations.requests.exceptions.ConnectionError("refused")), \
-             mock.patch("core.retry.time.sleep"):
-            with self.assertRaises(translations.OllamaUnavailableError):
-                OllamaTranslator().translate("Hello", "BG")
-
-    def test_ollama_empty_answer(self):
-        response = mock.Mock()
-        response.json.return_value = {"response": "  "}
-        with mock.patch.object(translations.requests, "post", return_value=response):
-            with self.assertRaises(translations.OllamaEmptyResponseError):
-                OllamaTranslator(model="tiny").translate("Hello", "BG")
 
 
 class FontSizeInThreadTest(unittest.TestCase):

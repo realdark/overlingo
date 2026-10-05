@@ -15,6 +15,7 @@ from core.update_check import STATUS_NEWER, STATUS_ERROR
 ABOUT_FEATURE_KEYS = (
     "about_feature1", "about_feature2", "about_feature3", "about_feature4", "about_feature5",
     "about_feature6", "about_feature7", "about_feature8", "about_feature9", "about_feature10",
+    "about_feature11",
 )
 ABOUT_TECH_KEYS = (
     "about_tech1", "about_tech2", "about_tech3", "about_tech4",

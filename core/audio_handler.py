@@ -8,7 +8,7 @@ from core.network import has_internet_connection
 
 
 class AudioThread(QThread):
-    finished_signal = QtCore.pyqtSignal()  # ✅ Сега QtCore е импортиран
+    finished_signal = QtCore.pyqtSignal()
     no_internet_signal = QtCore.pyqtSignal()
 
     def __init__(self, text, audio_lang, speed=1.0):
@@ -38,8 +38,7 @@ class AudioThread(QThread):
             # Малка забавяка за да се освободи файла
             time.sleep(0.1)
             
-            # Директно опитваме да изтрием, без сложни проверки
-            if hasattr(self, 'temp_file') and self.temp_file:
+            if self.temp_file:
                 try:
                     os.remove(self.temp_file)
                     logger.info(f"Изтрит временен файл: {self.temp_file}")
@@ -53,7 +52,7 @@ class AudioThread(QThread):
         
     def __del__(self):
         """Деструктор - гарантира почистване при изтриване на обекта"""
-        if hasattr(self, 'temp_file') and self.temp_file:
+        if getattr(self, "temp_file", None):  # getattr - __init__ може да не е стигнал дотук
             self.cleanup_temp_file()
 
     async def _play_edge_tts(self):
@@ -66,7 +65,7 @@ class AudioThread(QThread):
         except Exception as e:
             logger.error(f"Грешка при аудио възпроизвеждане: {e}", exc_info=True)
         finally:
-            if hasattr(self, 'temp_file') and self.temp_file is not None:
+            if self.temp_file is not None:
                 self.cleanup_temp_file()
             self.finished_signal.emit()
 
@@ -81,9 +80,10 @@ class AudioThread(QThread):
         os.close(fd)
         self.temp_file = path
 
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                with open(path, "ab") as f:
+        # Файлът се отваря веднъж за всички парчета (не за всяко поотделно).
+        with open(path, "wb") as f:
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
                     f.write(chunk["data"])
 
         return path

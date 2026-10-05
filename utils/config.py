@@ -139,8 +139,6 @@ DEFAULT_SETTINGS = {
     "window_pos": None, 
     "translation_api": "google",
     "translation_api_key": "",
-    "ollama_model": "llama3.2",
-    "ollama_url": "http://localhost:11434",
     "ocr_lang": "eng",
     "target_lang": "",
     "overlay_translation_enabled": True,
@@ -164,4 +162,6 @@ DEFAULT_SETTINGS = {
 # зареждане, за да не остават завинаги в settings.json.
 OBSOLETE_SETTINGS = (
     "mark_translate_enabled",  # до 2.x: отделни бутони "Маркиране" и "Превод"
+    "ollama_model",  # до 3.1: Ollama, заменена от превода без интернет (Argos)
+    "ollama_url",
 )

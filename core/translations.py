@@ -1,7 +1,7 @@
 """
 ПРЕВОДНИ УСЛУГИ И КЕШИРАНЕ
 
-Трите преводача (Google / DeepL / Microsoft) споделят общ интерфейс:
+Преводачите (Google / DeepL / Microsoft / Argos без интернет) споделят общ интерфейс:
     translate(text, target_lang) -> str
 
 Всички връщат директно текст (str), вместо отделен обект-обвивка
@@ -9,6 +9,8 @@
 """
 
 import re
+import threading
+from collections import OrderedDict
 
 from utils.imports import QThread, pyqtSignal, requests, deepl, pytesseract
 from utils.logging_setup import logger
@@ -16,6 +18,7 @@ from core.retry import retry_with_backoff
 from core.network import has_internet_connection
 from core.font_size_detector import FontSizeDetector
 from core.capture import OCR_UPSCALE
+from core.argos import ArgosTranslator, ArgosModelMissingError, ArgosNotInstalledError, libraries_available
 
 
 class NoInternetError(Exception):
@@ -25,18 +28,8 @@ class NoInternetError(Exception):
     целия retry цикъл (~7s) напразно. Съобщението НЕ съдържа думи като
     "connection"/"timeout"/"429", за да не бъде сметнато за retryable от
     is_retryable_error() в core/retry.py - тук няма смисъл от нов опит.
-    Ollama НЕ използва това - тя е локална, работи офлайн по дизайн.
+    Argos (превод на компютъра) не използва това - работи без интернет по дизайн.
     """
-    pass
-
-
-class OllamaUnavailableError(Exception):
-    """Ollama не отговаря на зададения адрес (str(e) е адресът)."""
-    pass
-
-
-class OllamaEmptyResponseError(Exception):
-    """Ollama отговори, но без превод - обикновено моделът не е изтеглен (str(e) е моделът)."""
     pass
 
 
@@ -48,10 +41,10 @@ def error_key_for(exc):
     """
     if isinstance(exc, NoInternetError):
         return "no_internet", ""
-    if isinstance(exc, OllamaUnavailableError):
-        return "ollama_unavailable", str(exc)
-    if isinstance(exc, OllamaEmptyResponseError):
-        return "ollama_empty_response", str(exc)
+    if isinstance(exc, ArgosModelMissingError):
+        return "argos_model_missing", str(exc)
+    if isinstance(exc, ArgosNotInstalledError):
+        return "argos_not_installed", str(exc)
     return "translation_error", str(exc)
 
 
@@ -183,48 +176,6 @@ class GoogleTranslator(BaseTranslator):
             raise Exception(f"Google Translate error: {e}")
 
 
-class OllamaTranslator(BaseTranslator):
-    """
-    Локален превод чрез Ollama (напр. llama3.2, gemma2, qwen2.5) - работи
-    офлайн, без ключ, без rate limit. Изисква Ollama да работи локално
-    (`ollama serve`, по подразбиране на localhost:11434) с изтеглен модел
-    (`ollama pull llama3.2`).
-    """
-
-    def __init__(self, model="llama3.2", base_url="http://localhost:11434"):
-        self.model = model or "llama3.2"
-        self.base_url = (base_url or "http://localhost:11434").rstrip("/")
-
-    def _request(self, text, target_lang):
-        prompt = (
-            f"Translate the following text to {target_lang}. "
-            f"Output ONLY the translation itself, with no explanation, "
-            f"quotes, or extra commentary:\n\n{text}"
-        )
-        response = requests.post(
-            f"{self.base_url}/api/generate",
-            json={"model": self.model, "prompt": prompt, "stream": False},
-            timeout=60,  # локалните модели могат да са бавни, особено при първо зареждане
-        )
-        response.raise_for_status()
-        return response.json()
-
-    def translate(self, text, target_lang):
-        try:
-            result = retry_with_backoff(
-                lambda: self._request(text, target_lang), max_attempts=2, label="Ollama"
-            )
-        except requests.exceptions.ConnectionError:
-            raise OllamaUnavailableError(self.base_url)
-        except Exception as e:
-            raise Exception(f"Ollama: {e}")
-
-        translated = (result.get("response") or "").strip()
-        if not translated:
-            raise OllamaEmptyResponseError(self.model)
-        return translated
-
-
 class DeepLTranslator(BaseTranslator):
     """Тънка обвивка около официалната deepl библиотека, за да пасне на BaseTranslator."""
 
@@ -243,118 +194,160 @@ class DeepLTranslator(BaseTranslator):
 
 
 class TranslationCache:
-    def __init__(self):
-        self.cache = {}
-        self.hits = 0
-        self.misses = 0
+    """
+    Вече преведен текст -> превод, за да не се праща същата заявка пак (при
+    авто-рефреш, "Преведи отново", еднакъв текст в прозореца за текст).
+    Ключът е текстът (без разлика в интервалите и главните букви) ЗАЕДНО с
+    целевия език - иначе след смяна на езика излизаше старият превод.
+    Пази най-много MAX_ITEMS записа; при препълване отпада най-отдавна
+    ползваният.
+    """
 
-    def get(self, text):
-        normalized = self._normalize_text(text)
-        if normalized in self.cache:
-            self.hits += 1
-            return self.cache[normalized]
-        self.misses += 1
-        return None
+    MAX_ITEMS = 500
 
-    def put(self, text, translation):
-        normalized = self._normalize_text(text)
-        self.cache[normalized] = translation
+    def __init__(self, max_items=MAX_ITEMS):
+        self.max_items = max_items
+        self.cache = OrderedDict()
 
-    def _normalize_text(self, text):
-        if not text:
-            return ""
-        return " ".join(text.split()).strip().lower()
+    def get(self, text, target_lang=""):
+        key = self._key(text, target_lang)
+        if key not in self.cache:
+            return None
+        self.cache.move_to_end(key)  # току-що ползван - отпада последен
+        return self.cache[key]
+
+    def put(self, text, translation, target_lang=""):
+        key = self._key(text, target_lang)
+        self.cache[key] = translation
+        self.cache.move_to_end(key)
+        while len(self.cache) > self.max_items:
+            self.cache.popitem(last=False)
+
+    @staticmethod
+    def _key(text, target_lang):
+        normalized = " ".join((text or "").split()).lower()
+        return (normalized, (target_lang or "").upper())
 
     def clear(self):
-        """Изчиства целия кеш (статистиката hits/misses се запазва)."""
+        """Изчиства целия кеш."""
         self.cache.clear()
 
 
 class FallbackTranslator(BaseTranslator):
     """
-    Обвива основен преводач; ако той гръмне (след собствените си retry
-    опити), автоматично пробва резервния (обикновено Google - безплатен,
-    не изисква ключ, винаги достъпен). used_fallback показва дали
-    последният translate() е минал през резервния преводач - вика се от
-    TranslationThread, за да покаже съобщение на потребителя.
+    Обвива основен преводач с резервни варианти:
+      - няма интернет -> превод на компютъра (Argos), ако моделите са свалени;
+      - друга грешка -> fallback (обикновено Google - безплатен, без ключ).
+    fallback_used казва какво е станало при последния translate():
+    "" - основната услуга, "google" - резервната, "offline" - без интернет.
     """
 
-    def __init__(self, primary, fallback):
+    def __init__(self, primary, fallback, offline=None):
         self.primary = primary
         self.fallback = fallback
-        self.used_fallback = False
+        self.offline = offline
+        # Един преводач се ползва от няколко нишки едновременно (превод от
+        # екрана + прозореца за текст) - всяка нишка вижда своя резултат.
+        self._state = threading.local()
+
+    @property
+    def fallback_used(self):
+        return getattr(self._state, "fallback_used", "")
+
+    @fallback_used.setter
+    def fallback_used(self, value):
+        self._state.fallback_used = value
 
     def translate(self, text, target_lang):
-        self.used_fallback = False
+        self.fallback_used = ""
         try:
             return self.primary.translate(text, target_lang)
+        except NoInternetError:
+            if self.offline is None:
+                raise
+            try:
+                result = self.offline.translate(text, target_lang)
+            except Exception as offline_error:
+                logger.info(f"Няма интернет, а и превод без интернет не е възможен: {offline_error}")
+                raise NoInternetError("Няма интернет връзка") from None
+            logger.info("Няма интернет - преведено на компютъра (Argos)")
+            self.fallback_used = "offline"
+            return result
         except Exception as e:
             if self.fallback is None:
                 raise
             logger.warning(f"Основната услуга за превод се провали ({e}) - опитвам резервна (Google)")
-            self.used_fallback = True
+            self.fallback_used = "google"
             return self.fallback.translate(text, target_lang)
 
 
 # Съпоставя стойността от настройките (api_type) с конкретния клас преводач.
 _TRANSLATOR_FACTORIES = {
-    "google": lambda api_key, **kw: GoogleTranslator(),
-    "deepl": lambda api_key, **kw: DeepLTranslator(api_key) if api_key else None,
-    "microsoft": lambda api_key, **kw: MicrosoftTranslator(api_key) if api_key else None,
-    "ollama": lambda api_key, **kw: OllamaTranslator(
-        model=kw.get("ollama_model"), base_url=kw.get("ollama_url")
-    ),
+    "google": lambda api_key, source_lang: GoogleTranslator(),
+    "deepl": lambda api_key, source_lang: DeepLTranslator(api_key) if api_key else None,
+    "microsoft": lambda api_key, source_lang: MicrosoftTranslator(api_key) if api_key else None,
+    "argos": lambda api_key, source_lang: ArgosTranslator(source_lang or "en"),
 }
 
-# api_type-ове, за които НЕ се добавя автоматичен fallback към Google:
-# - "google" самото то е fallback-а, няма смисъл от себе-фолбек
-# - "ollama" е нарочно избран за офлайн/приватен превод - тихо падане
-#   към облачен Google би нарушило точно причината да избереш Ollama
-_NO_AUTO_FALLBACK = {"google", "ollama"}
+# Онлайн услугите, които при грешка падат към Google ("google" е самият
+# резервен вариант; "argos" е нарочно избран превод без интернет).
+_GOOGLE_FALLBACK = {"deepl", "microsoft"}
 
 
-def create_translator(api_type, api_key=None, enable_fallback=True, **kwargs):
+def create_translator(api_type, api_key=None, enable_fallback=True, source_lang="en"):
     """
-    Фабрика: връща инстанция на подходящия BaseTranslator за api_type,
-    или None ако няма нужния api_key (за deepl/microsoft).
-    За "ollama" kwargs може да съдържа ollama_model/ollama_url.
+    Фабрика: връща подходящия преводач за api_type, или None ако няма
+    нужния api_key (за deepl/microsoft).
+    source_lang - двубуквеният език на оригинала (за Argos, виж
+    core.argos.source_language).
 
-    Ако enable_fallback=True и услугата не е в _NO_AUTO_FALLBACK,
-    резултатът се обвива във FallbackTranslator с Google като резервен
-    вариант (Google не изисква ключ, така че винаги може да послужи).
+    Ако enable_fallback=True, онлайн услугите се обвиват във
+    FallbackTranslator: DeepL/Microsoft падат към Google при грешка, а
+    всички онлайн услуги - към превод на компютъра (Argos), ако няма
+    интернет и моделите за езиците са свалени.
     """
     factory = _TRANSLATOR_FACTORIES.get(api_type)
-    primary = factory(api_key, **kwargs) if factory else None
-    if primary is None:
-        return None
-    if enable_fallback and api_type not in _NO_AUTO_FALLBACK:
-        return FallbackTranslator(primary, GoogleTranslator())
-    return primary
+    primary = factory(api_key, source_lang) if factory else None
+    if primary is None or not enable_fallback or api_type == "argos":
+        return primary
+    google = GoogleTranslator() if api_type in _GOOGLE_FALLBACK else None
+    offline = ArgosTranslator(source_lang) if libraries_available() else None
+    if google is None and offline is None:
+        return primary  # няма към какво да падне
+    return FallbackTranslator(primary, google, offline)
+
+
+def fallback_notice_key(fallback_used):
+    """Ключът на съобщението за резервния превод ("google" / "offline")."""
+    return "offline_notice" if fallback_used == "offline" else "fallback_notice"
 
 
 def translate_with_cache(translator, text, target_lang, cache=None):
     """
     Превежда text, като първо гледа в кеша. Връща
-    (превод, от_кеша, през_резервната_услуга). Грешките от преводача се
-    подават нагоре непроменени. Общо за превода от екрана и за прозореца
-    за превод на текст.
+    (превод, от_кеша, резервен_вариант), където резервният вариант е ""
+    (основната услуга), "google" или "offline" (виж FallbackTranslator).
+    Грешките от преводача се подават нагоре непроменени. Общо за превода
+    от екрана и за прозореца за превод на текст.
     """
-    cached = cache.get(text) if cache is not None else None
+    cached = cache.get(text, target_lang) if cache is not None else None
     if cached is not None:
-        return cached, True, False
+        return cached, True, ""
     translated = translator.translate(text, target_lang)
-    used_fallback = getattr(translator, "used_fallback", False)
-    if cache is not None:
-        cache.put(text, translated)
-    return translated, False, used_fallback
+    fallback_used = getattr(translator, "fallback_used", "")
+    # Офлайн преводът (при липса на интернет) не се кешира - щом интернетът
+    # се върне, същият текст да мине пак през по-добрата онлайн услуга.
+    if cache is not None and fallback_used != "offline":
+        cache.put(text, translated, target_lang)
+    return translated, False, fallback_used
 
 
 class TranslationThread(QThread):
     """Изпълнява OCR + превод във фонова нишка, за да не блокира UI-а."""
 
-    # source_text, translated_text, from_cache, used_fallback,
+    # source_text, translated_text, from_cache, fallback_used ("" / "google" / "offline"),
     # font_size (размер на оригиналния шрифт в px; 0 = не е мерен)
-    finished_signal = pyqtSignal(str, str, bool, bool, int)
+    finished_signal = pyqtSignal(str, str, bool, str, int)
     # source_text (може да е празен), error_key (ключ за превод в locales), detail
     failed_signal = pyqtSignal(str, str, str)
 
@@ -468,14 +461,14 @@ class TranslationThread(QThread):
                 return
 
             try:
-                translated_text, from_cache, used_fallback = translate_with_cache(
+                translated_text, from_cache, fallback_used = translate_with_cache(
                     self.translator, text_for_translation, self.target_lang, self.translation_cache
                 )
             except Exception as e:
                 self.failed_signal.emit(text_for_translation, *error_key_for(e))
                 return
             self.finished_signal.emit(
-                text_for_translation, translated_text, from_cache, used_fallback, self._font_size()
+                text_for_translation, translated_text, from_cache, fallback_used, self._font_size()
             )
 
         except Exception as e:
@@ -489,8 +482,8 @@ class TextTranslationThread(QThread):
     изхвърли закъснял резултат, ако междувременно текстът е променен.
     """
 
-    # request_id, source_text, translated_text, from_cache, used_fallback
-    finished_signal = pyqtSignal(int, str, str, bool, bool)
+    # request_id, source_text, translated_text, from_cache, fallback_used ("" / "google" / "offline")
+    finished_signal = pyqtSignal(int, str, str, bool, str)
     # request_id, error_key, detail
     failed_signal = pyqtSignal(int, str, str)
 
@@ -507,10 +500,10 @@ class TextTranslationThread(QThread):
             self.failed_signal.emit(self.request_id, "no_translator", "")
             return
         try:
-            translated, from_cache, used_fallback = translate_with_cache(
+            translated, from_cache, fallback_used = translate_with_cache(
                 self.translator, self.text, self.target_lang, self.translation_cache
             )
         except Exception as e:
             self.failed_signal.emit(self.request_id, *error_key_for(e))
             return
-        self.finished_signal.emit(self.request_id, self.text, translated, from_cache, used_fallback)
+        self.finished_signal.emit(self.request_id, self.text, translated, from_cache, fallback_used)

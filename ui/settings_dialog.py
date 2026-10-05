@@ -1,16 +1,15 @@
 """
 ДИАЛОГ С НАСТРОЙКИ
 
-Заменя show_settings() + create_settings_controls() + get_settings_from_controls()
-от ui/main_window.py. Полетата на формата се дефинират декларативно в
-_field_specs(), а стойностите се четат по ИМЕ (widgets dict), не по
-позиция в tuple - виж bash_tool discussion за проблема с controls[-2]/controls[-1].
+Полетата на формата се дефинират декларативно в _field_specs(), а
+стойностите се четат по ИМЕ (widgets dict), не по позиция.
 """
 
 from utils.imports import QtWidgets, QtCore
 from utils.config import get_available_ocr_languages, get_tessdata_dir
 from core.settings_manager import SettingsValidationError
-from core.ollama_pull import OllamaPullThread
+from core.argos_download import ArgosDownloadThread
+from core import argos
 from core.tessdata_download import TessdataDownloadThread
 from core.audio_handler import EdgeVoicesThread
 from core.hotkey_manager import HOTKEY_SUPPORTED
@@ -43,10 +42,6 @@ class SettingsDialog(QtWidgets.QDialog):
         self.on_opacity_preview = on_opacity_preview
         self.on_save = on_save
         self.widgets = {}
-        # Пази последната видяна стойност на api_combo, за да не изскача
-        # pop-up-ът за Ollama при всяко отваряне на диалога, докато Ollama
-        # вече Е избраната услуга - само при реална смяна КЪМ Ollama.
-        self._last_seen_api = current_settings.get("translation_api")
 
         self.setWindowTitle(self.i18n.tr("settings_title"))
         self.setMinimumWidth(520)
@@ -63,7 +58,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _build_ui(self):
         main_layout = QtWidgets.QVBoxLayout(self)
-        self._pull_thread = None
+        self._argos_thread = None
 
         # Полетата вече са групирани по таб (виж "tab" ключа в _field_specs) -
         # всеки таб получава своя собствена решетка, за да не се налага
@@ -82,7 +77,7 @@ class SettingsDialog(QtWidgets.QDialog):
         for tab_key, tab_label_key in tab_order:
             tab_specs = specs_by_tab.get(tab_key)
             if not tab_specs:
-                continue  # напр. "hotkey" изобщо липсва извън Windows
+                continue  # напр. "hotkey" липсва, където глобалните hotkey-и не се поддържат
 
             tab_page = QtWidgets.QWidget()
             grid = QtWidgets.QGridLayout(tab_page)
@@ -124,19 +119,30 @@ class SettingsDialog(QtWidgets.QDialog):
                     grid.addWidget(tessdata_link, row, 1)
                     row += 1
 
-                if spec["name"] == "ollama_model_edit":
-                    # Бутонът "Изтегли модел" отива веднага ПОД полето с модела
-                    # (не в края на формата) - директно се вижда за кой модел е.
-                    # Отделен е от декларативната схема по-горе, защото стартира
-                    # фонова streaming задача, не просто задава/чете стойност.
-                    self.ollama_download_btn = QtWidgets.QPushButton(self.i18n.tr("download_model_button"))
-                    self.ollama_download_btn.clicked.connect(self._handle_download_model)
-                    self.ollama_download_status = QtWidgets.QLabel("")
-                    download_row = QtWidgets.QHBoxLayout()
-                    download_row.addWidget(self.ollama_download_btn)
-                    download_row.addWidget(self.ollama_download_status, stretch=1)
-                    grid.addLayout(download_row, row, 1)
+                if spec["name"] == "target_edit":
+                    # Превод без интернет (Argos): моделите са по двойка езици
+                    # (език на текста -> целеви език) и се свалят оттук. Важат и
+                    # като резервен вариант за онлайн услугите, когато няма интернет.
+                    self.argos_download_btn = QtWidgets.QPushButton(self.i18n.tr("argos_download_button"))
+                    self.argos_download_btn.clicked.connect(self._handle_download_argos)
+                    self.argos_download_btn.setToolTip(self.i18n.tr("argos_download_tooltip"))
+                    self.argos_download_status = QtWidgets.QLabel("")
+                    if ArgosDownloadThread.is_busy():
+                        self.argos_download_btn.setEnabled(False)
+                        self.argos_download_status.setText(self.i18n.tr("argos_downloading"))
+                    argos_row = QtWidgets.QHBoxLayout()
+                    argos_row.addWidget(self.argos_download_btn)
+                    argos_row.addWidget(self.argos_download_status, stretch=1)
+                    grid.addLayout(argos_row, row, 1)
                     row += 1
+
+                    self.argos_installed_label = QtWidgets.QLabel("")
+                    self.argos_installed_label.setObjectName("muted_label")
+                    self.argos_installed_label.setWordWrap(True)
+                    grid.addWidget(self.argos_installed_label, row, 1)
+                    row += 1
+                    self._refresh_argos_installed()
+                    self.widgets["api_combo"].currentIndexChanged.connect(self._refresh_argos_installed)
 
             grid.setRowStretch(row, 1)  # избутва съдържанието нагоре, ако табът е по-къс от другите
             tabs.addTab(tab_page, self.i18n.tr(tab_label_key))
@@ -216,7 +222,7 @@ class SettingsDialog(QtWidgets.QDialog):
             w.addItem(self.i18n.tr("translation_api_google"), "google")
             w.addItem(self.i18n.tr("translation_api_deepl"), "deepl")
             w.addItem(self.i18n.tr("translation_api_microsoft"), "microsoft")
-            w.addItem(self.i18n.tr("translation_api_ollama"), "ollama")
+            w.addItem(self.i18n.tr("translation_api_argos"), "argos")
             idx = w.findData(s.get("translation_api"))
             if idx >= 0:
                 w.setCurrentIndex(idx)
@@ -289,8 +295,6 @@ class SettingsDialog(QtWidgets.QDialog):
             {"name": "refresh_interval_spin", "label_key": "refresh_interval_label", "make": refresh_interval_spin, "tab": "interface"},
             {"name": "api_combo", "label_key": "translation_api_label", "make": api_combo, "tab": "translation"},
             {"name": "translation_edit", "label_key": "translation_api_key_label", "make": line_edit("translation_api_key"), "tab": "translation"},
-            {"name": "ollama_model_edit", "label_key": "ollama_model_label", "make": line_edit("ollama_model", "llama3.2"), "tab": "translation"},
-            {"name": "ollama_url_edit", "label_key": "ollama_url_label", "make": line_edit("ollama_url", "http://localhost:11434"), "tab": "translation"},
             {"name": "ocr_combo", "label_key": "ocr_lang_label", "make": ocr_lang_combo, "tab": "translation"},
             {"name": "target_edit", "label_key": "target_lang_label", "make": line_edit("target_lang", "", "target_lang_placeholder"), "tab": "translation"},
             {"name": "timeout_spin", "label_key": "translation_timeout_label", "make": timeout_spin, "tab": "translation"},
@@ -334,19 +338,6 @@ class SettingsDialog(QtWidgets.QDialog):
 
             selected_api = w["api_combo"].currentData()
             w["translation_edit"].setEnabled(selected_api in ("deepl", "microsoft"))
-            w["ollama_model_edit"].setEnabled(selected_api == "ollama")
-            w["ollama_url_edit"].setEnabled(selected_api == "ollama")
-            is_pulling = self._pull_thread is not None and self._pull_thread.isRunning()
-            self.ollama_download_btn.setEnabled(selected_api == "ollama" and not is_pulling)
-
-            if selected_api == "ollama" and selected_api != self._last_seen_api:
-                # Pop-up вместо инлайн текст в формата (както при
-                # предупрежденията) - само при реална смяна КЪМ Ollama,
-                # не при всяко отваряне на диалога, докато е вече избран.
-                QtWidgets.QMessageBox.information(
-                    self, self.i18n.tr("settings_title"), self.i18n.tr("ollama_setup_hint")
-                )
-            self._last_seen_api = selected_api
 
             if HOTKEY_SUPPORTED:
                 hotkeys_on = w["hotkey_checkbox"].isChecked()
@@ -371,8 +362,6 @@ class SettingsDialog(QtWidgets.QDialog):
             "text_size": w["text_size_spin"].value(),
             "font_color": w["color_combo"].currentData(),
             "translation_api_key": w["translation_edit"].text().strip(),
-            "ollama_model": w["ollama_model_edit"].text().strip() or "llama3.2",
-            "ollama_url": w["ollama_url_edit"].text().strip() or "http://localhost:11434",
             "audio_lang": w["audio_combo"].currentText().strip(),
             "audio_speed": w["audio_speed_combo"].currentData(),
             "ocr_lang": w["ocr_combo"].currentData() or "eng",
@@ -387,7 +376,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "translation_api": w["api_combo"].currentData(),
             "hide_overlay_enabled": w["hide_overlay_checkbox"].isChecked(),
         }
-        # hotkey_* полетата съществуват само на Windows (виж _field_specs) -
+        # hotkey_* полетата съществуват само на Windows и Linux/X11 (виж _field_specs) -
         # на другите платформи просто не пипаме съществуващите стойности.
         if HOTKEY_SUPPORTED:
             result["hotkey_enabled"] = w["hotkey_checkbox"].isChecked()
@@ -429,24 +418,24 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _start_download(self, thread, status_label, download_btn, downloading_key):
         """
-        Общо начало за 'изтегли и следи прогреса' потоците (Ollama модел /
-        tessdata език) - деактивира бутона, показва начален статус, стартира
-        нишката. Самите progress сигнали остават отделни по-долу, защото
-        имат различни сигнатури (байтове при tessdata, процент+статус при
-        Ollama), но стартът и краят са идентични за двата.
+        Общо начало за 'изтегли и следи прогреса' потоците (tessdata език /
+        модели за превод без интернет) - деактивира бутона, показва начален
+        статус, стартира нишката. Самите progress сигнали остават отделни
+        по-долу, защото имат различни сигнатури, но стартът и краят са
+        идентични.
         """
         download_btn.setEnabled(False)
         status_label.setText(self.i18n.tr(downloading_key))
         thread.start()
 
     def _finish_download(self, status_label, download_btn, success, message_key, params, done_key,
-                          on_success=None, should_enable=True):
+                          on_success=None):
         """
         Общ завършек - виж _start_download за контекста защо е отделено от
         прогреса. При успех params["name"] е изтегленото (език/модел), при
         провал съобщението е tr(message_key) с попълнени params.
         """
-        download_btn.setEnabled(should_enable)
+        download_btn.setEnabled(True)
         message = params.get("name", "") if success else self.i18n.tr(message_key).format(**params)
         if success:
             status_label.setText(f"✅ {self.i18n.tr(done_key)}: {message}")
@@ -479,13 +468,16 @@ class SettingsDialog(QtWidgets.QDialog):
             self.tessdata_download_btn, "downloading_tessdata"
         )
 
-    def _on_tessdata_progress(self, downloaded, total):
+    @staticmethod
+    def _progress_text(downloaded, total):
+        """"42%", или "3.5 MB", ако сървърът не е казал размера."""
         if total > 0:
-            percent = int(downloaded * 100 / total)
-            self.tessdata_download_status.setText(f"{self.i18n.tr('downloading_tessdata')} ({percent}%)")
-        else:
-            mb = downloaded / (1024 * 1024)
-            self.tessdata_download_status.setText(f"{self.i18n.tr('downloading_tessdata')} ({mb:.1f} MB)")
+            return f"{int(downloaded * 100 / total)}%"
+        return f"{downloaded / (1024 * 1024):.1f} MB"
+
+    def _on_tessdata_progress(self, downloaded, total):
+        self.tessdata_download_status.setText(
+            f"{self.i18n.tr('downloading_tessdata')} ({self._progress_text(downloaded, total)})")
 
     def _on_tessdata_finished(self, success, message_key, params):
         self._finish_download(
@@ -506,30 +498,55 @@ class SettingsDialog(QtWidgets.QDialog):
             combo.setCurrentIndex(idx)
         combo.blockSignals(False)
 
-    def _handle_download_model(self):
-        """Праща /api/pull към Ollama и следи прогреса - вместо потребителят да го прави ръчно в терминал."""
-        model = self.widgets["ollama_model_edit"].text().strip() or "llama3.2"
-        base_url = self.widgets["ollama_url_edit"].text().strip() or "http://localhost:11434"
+    def _argos_languages(self):
+        """(език на текста, целеви език) според текущо избраното във формата."""
+        source = argos.source_language(self.widgets["ocr_combo"].currentData() or "eng")
+        target = (self.widgets["target_edit"].text().strip() or "BG").lower()[:2]
+        return source, target
 
-        self._pull_thread = OllamaPullThread(model, base_url)
-        self._pull_thread.progress.connect(self._on_pull_progress)
-        self._pull_thread.finished_pull.connect(self._on_pull_finished)
+    def _refresh_argos_installed(self, _name=None):
+        """Показва свалените двойки езици за превод без интернет."""
+        pairs = sorted(argos.installed_pairs())
+        text = ", ".join(argos.pair_label(p) for p in pairs) if pairs else self.i18n.tr("argos_none_installed")
+        if pairs and self.widgets["api_combo"].currentData() != "argos":
+            # С онлайн услуга моделите се ползват само когато няма интернет.
+            text = f"{text} {self.i18n.tr('argos_fallback_hint')}"
+        self.argos_installed_label.setText(f"{self.i18n.tr('argos_installed_label')} {text}")
+
+    def _handle_download_argos(self):
+        """Сваля моделите за превод без интернет за текущите езици (директно или през английски)."""
+        if not argos.libraries_available():
+            QtWidgets.QMessageBox.critical(
+                self, self.i18n.tr("warning_title"), self.i18n.tr("argos_not_installed")
+            )
+            return
+        if ArgosDownloadThread.is_busy():
+            # Сваляне, пуснато от предишно отваряне на Настройки, още тече.
+            self.argos_download_btn.setEnabled(False)
+            self.argos_download_status.setText(self.i18n.tr("argos_downloading"))
+            return
+        source, target = self._argos_languages()
+        if source == target:
+            QtWidgets.QMessageBox.information(
+                self, self.i18n.tr("warning_title"), self.i18n.tr("argos_same_language")
+            )
+            return
+        self._argos_thread = ArgosDownloadThread(source, target)
+        self._argos_thread.progress.connect(self._on_argos_progress)
+        self._argos_thread.finished_download.connect(self._on_argos_finished)
         self._start_download(
-            self._pull_thread, self.ollama_download_status,
-            self.ollama_download_btn, "downloading_model"
+            self._argos_thread, self.argos_download_status,
+            self.argos_download_btn, "argos_downloading"
         )
 
-    def _on_pull_progress(self, status, percent):
-        if percent >= 0:
-            self.ollama_download_status.setText(f"{status} ({percent}%)")
-        else:
-            self.ollama_download_status.setText(status)
+    def _on_argos_progress(self, pair, downloaded, total):
+        self.argos_download_status.setText(
+            f"{self.i18n.tr('argos_downloading')} {pair} ({self._progress_text(downloaded, total)})")
 
-    def _on_pull_finished(self, success, message_key, params):
-        selected_api = self.widgets["api_combo"].currentData()
+    def _on_argos_finished(self, success, message_key, params):
         self._finish_download(
-            self.ollama_download_status, self.ollama_download_btn,
-            success, message_key, params, "model_downloaded", should_enable=(selected_api == "ollama")
+            self.argos_download_status, self.argos_download_btn,
+            success, message_key, params, "argos_downloaded", on_success=self._refresh_argos_installed
         )
 
     def _handle_reset(self):

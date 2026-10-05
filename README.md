@@ -7,24 +7,30 @@
 ## Функционалности
 
 - Маркиране и превод на текст от всяка част от екрана (OCR чрез Tesseract)
-- Четири преводача: **Google Translate**, **DeepL**, **Microsoft Azure
-  Translator** и **Ollama** (локално, офлайн, без ключ)
-- Автоматичен fallback към Google, ако основната платена услуга откаже
-  (с изключение на Ollama - тя нарочно не пада тихо към облак)
+- Преводачи: **Google Translate**, **DeepL**, **Microsoft Azure
+  Translator** и **превод без интернет** на самия компютър (свободните
+  модели на Argos Translate, пускани с CTranslate2 - без ключ и без
+  отделна програма; моделите се свалят от Настройки, ~70 MB на двойка
+  езици, а без директен модел преводът минава през английски)
+- Автоматичен fallback към Google, ако основната платена услуга откаже,
+  и към превод без интернет, ако няма връзка, а моделите са свалени
 - Retry с exponential backoff при временни грешки (напр. 429 Too Many
   Requests) и бърза проверка за интернет връзка преди облачните API-та
 - Избор и изтегляне на OCR езици направо от приложението (Settings →
   "Свали език", тегли от `tessdata_fast`)
 - Избор на глас за озвучаване от пълния списък edge-tts гласове, с
   автоматично допълване при отваряне на Settings
-- Прозрачен overlay за резултатите, позициониран върху оригиналния текст
+- Прозрачен overlay за резултатите, позициониран върху оригиналния текст,
+  със същия размер на шрифта (мери се във фоновата нишка - виж
+  `core/font_size_detector.py`)
 - Кеширане на преводите (не се плаща повторна заявка за вече видян текст)
 - Скорост на озвучаването (0.5x-2x, като YouTube)
 - "Преведи отново" - нов превод на последно маркираната област без
   ново маркиране
 - Прозорец за превод на написан/поставен текст (с бутон / Ctrl+Enter
   или автоматично секунда след последния клавиш - с отметка)
-- История на преводите от текущата сесия (не се записва на диска)
+- История на преводите от текущата сесия (не се записва на диска), със
+  статистика колко превода са направени и колко са взети от кеша
 - Два глобални hotkey-а - "Маркирай и преведи" и "Преведи отново"
   (Windows и Linux под X11; не под Wayland/macOS - виж
   `core/hotkey_manager.py` защо) и минимизиране в taskbar-а
@@ -68,16 +74,14 @@ sudo apt install tesseract-ocr-bul   # или желания език
 или ползвай бутона "Свали език" в Settings (пише директно в системната
 tessdata папка, откривана автоматично).
 
-### 3. Ollama (по избор, за локален/офлайн превод)
+### 3. Превод без интернет (по избор)
 
-```bash
-curl -fsSL https://ollama.com/install.sh | sh   # Linux
-# или изтегли инсталатора от https://ollama.com/download за Windows/macOS
-
-ollama pull llama3.2
-```
-
-Не е нужен, ако ще ползваш само Google/DeepL/Microsoft.
+Библиотеките `ctranslate2` и `sentencepiece` идват с `requirements.txt`.
+Самите модели (по двойка езици) се свалят от Настройки → таб „Превод“ →
+„Свали езиците за превод без интернет“ в папка `argos-models` до
+програмата. Не е нужно, ако ще ползваш само Google/DeepL/Microsoft.
+При преминаване към нова версия копирай папката `argos-models` в новата,
+за да не сваляш моделите отново.
 
 ### 4. Стартиране
 
@@ -103,7 +107,7 @@ python3 -m unittest discover -s tests -t .
 ```
 main.py                    Входна точка (+ защита от второ копие)
 core/                       Логика без интерфейс (тестваема)
-  translations.py           Преводачи (Google/DeepL/Microsoft/Ollama) + fallback, кеш, нишки
+  translations.py           Преводачи (Google/DeepL/Microsoft/без интернет) + fallback, кеш, нишки
   translation_controller.py Оркестрация: screenshot → OCR → превод (+ timeout)
   history.py                История на преводите (само за сесията)
   capture.py                Screenshot + OpenCV preprocessing
@@ -114,7 +118,8 @@ core/                       Логика без интерфейс (тества
   audio_handler.py          Text-to-speech (edge-tts) чрез фонова нишка
   audio_playback.py         Споделена play/stop логика
   localization.py           Зареждане на текстовете от assets/locales
-  ollama_pull.py            Изтегляне на Ollama модел от приложението
+  argos.py                  Превод без интернет (моделите на Argos Translate)
+  argos_download.py         Сваляне на моделите за превод без интернет
   tessdata_download.py      Изтегляне на Tesseract езикови данни
   hotkey_manager.py         Глобални hotkey-и (Windows, Linux/X11)
   single_instance.py        Само едно отворено копие
@@ -131,12 +136,13 @@ ui/                          PyQt5 интерфейс
 utils/
   version.py                 APP_VERSION - единственото място за версията
   config.py                  Пътища, настройки по подразбиране
-  logging_setup.py           Логване (конзола + app.log)
+  logging_setup.py           Логване (конзола + app.log), записване на сривове (crash.log)
 assets/
   locales/                   bg.json, en.json - всички текстове на интерфейса
   theme.qss                  Тъмна тема
   images/, icons/            Икони
 tests/                       Тестове (unittest)
+tools/fix_qt_runtime.py      Windows: сменя стария msvcp140.dll на PyQt5 (пуска се от build.bat)
 install.sh                   Linux: стартер за двоен клик и меню с приложения
 README_DIST_*.txt            README за потребителя, влиза в build-а
 ```
@@ -148,7 +154,9 @@ build.bat     Windows (PyInstaller, onedir)
 build.sh      Linux (PyInstaller, onedir)
 ```
 
-Изисква `pip install pyinstaller` предварително. Резултатът е в
+Изисква `pip install pyinstaller` предварително и активирана виртуална
+среда (`venv`), в която са инсталирани зависимостите. Скриптовете могат да
+се пускат от всяка папка - сами влизат в папката на проекта. Резултатът е в
 `dist/overlingo/`, заедно с готов архив в `dist/`
 (`Overlingo-<версия>-win64.zip` / `Overlingo-<версия>-linux-<архитектура>.tar.gz`).
 Версията се сменя само в `utils/version.py` - About прозорецът и имената
@@ -156,10 +164,47 @@ build.sh      Linux (PyInstaller, onedir)
 `settings.json` нарочно НЕ се копира в build-а — приложението си генерира
 чист файл при първо стартиране (виж `core/settings_manager.py`).
 
+## Пускане на нова версия
+
+1. Смени номера в `utils/version.py` (формат `3.1`, `3.2`, `3.0.1` - без
+   водещи нули; сравнява се числово).
+2. Билд на Windows (`build.bat`) и на Linux (`build.sh`).
+3. GitHub → Releases → нов release с tag **`v` + същия номер** (напр.
+   `v3.1`), прикачи двата архива от `dist/`.
+
+"Провери за нова версия" в програмата чете последния публикуван release
+и сравнява tag-а му с `utils/version.py` - ако двата се разминават,
+проверката ще греши. Чернови и pre-release не се предлагат на
+потребителите.
+
+## Git
+
+`.gitignore` пази `settings.json` (може да съдържа API ключ), `app.log`,
+`crash.log`, `argos-models/`, `build/`, `dist/` и `venv/` извън хранилището. `.gitattributes` пази
+краищата на редовете: `.sh` винаги с Linux (LF), `.bat` с Windows
+(CRLF) - иначе скриптовете гърмят, ако минат през другата система. При
+качване от Windows `build.sh` и `install.sh` губят флага "изпълним":
+`git update-index --chmod=+x build.sh install.sh` веднъж го оправя.
+
 ## Логове
 
 Всички съобщения (INFO/WARNING/ERROR) отиват в конзолата и в `app.log`,
-до `settings.json`, с ротация (макс. 1MB, до 3 архива).
+до `settings.json`, с ротация (макс. 1MB, до 3 архива). Неприхванати
+грешки също се записват там, вместо програмата да се затвори без следа.
+
+Ако програмата падне в C/C++ библиотека (ctranslate2, OpenCV...), Python
+не успява да запише грешка - тогава `crash.log` (до програмата) показва
+къде е станал сривът (`faulthandler`).
+
+На Windows `main.py` зарежда `ctranslate2` преди PyQt5: PyQt5 носи по-стара
+`msvcp140.dll` и ако тя се зареди първа, преводът без интернет срива
+програмата.
+`build.bat` пуска преди PyInstaller `tools/fix_qt_runtime.py`: той
+преименува стария `msvcp140.dll` (и сродните) в `PyQt5\Qt5\bin` на
+`*.old`, ако в `System32` има по-нов - иначе PyInstaller пада при
+"Isolated subprocess crashed while importing package 'sentencepiece'",
+а билдът би съдържал стария файл. Ръчно: `python tools\fix_qt_runtime.py`;
+връщане - махни `.old` от имената.
 
 ## Лиценз
 
@@ -170,4 +215,5 @@ GPL-3.0 — виж `LICENSE`. Изисква се от лиценза на PyQt5
 
 PyQt5, Tesseract OCR, OpenCV, mss, pytesseract, edge-tts, pygame,
 requests, Google Translate, DeepL API, Microsoft Azure Translator,
-Ollama — всяка със собствен лиценз/условия за ползване.
+CTranslate2, SentencePiece, моделите на Argos Translate (OPUS/OpenNMT) —
+всяка със собствен лиценз/условия за ползване.

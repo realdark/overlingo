@@ -9,7 +9,8 @@ Settings, screenshot+OCR+превод, преводачите и локализ�
 from utils.imports import QtWidgets, QtCore, QtGui, QTimer, sys, threading
 from utils.logging_setup import logger
 from utils.config import image_path
-from core.translations import TranslationCache, create_translator
+from core.translations import TranslationCache, create_translator, fallback_notice_key
+from core import argos
 from core.translation_controller import TranslationController
 from core.settings_manager import SettingsManager
 from core.localization import UiLocalizer
@@ -101,30 +102,28 @@ class MainWindow(QtWidgets.QWidget):
         """Разопакова речника с настройки в атрибути на прозореца."""
         self.text_size = settings["text_size"]
         self.font_color = settings["font_color"]
-        self.overlay_opacity = settings.get("overlay_opacity", 200)
-        self.translation_api = settings.get("translation_api")
+        self.overlay_opacity = settings["overlay_opacity"]
+        self.translation_api = settings["translation_api"]
         self.translation_api_key = settings["translation_api_key"]
-        self.ollama_model = settings.get("ollama_model", "llama3.2")
-        self.ollama_url = settings.get("ollama_url", "http://localhost:11434")
         self.audio_lang = settings["audio_lang"]
-        self.audio_speed = settings.get("audio_speed", 1.0)
+        self.audio_speed = settings["audio_speed"]
         self.ocr_lang = settings["ocr_lang"]
         self.target_lang = settings["target_lang"] or "BG"
         self.overlay_translation_enabled = settings["overlay_translation_enabled"]
         self.preserve_font_size = settings["preserve_font_size"]
-        self.auto_refresh_enabled = settings.get("auto_refresh_enabled", False)
-        self.refresh_interval_ms = settings.get("auto_refresh_interval", 5000)
+        self.auto_refresh_enabled = settings["auto_refresh_enabled"]
+        self.refresh_interval_ms = settings["auto_refresh_interval"]
         self.hide_overlay_enabled = settings["hide_overlay_enabled"]
-        self.hotkey_enabled = settings.get("hotkey_enabled", False)
-        self.hotkey_combo = settings.get("hotkey_combo", "<ctrl>+<alt>+t")
-        self.hotkey_retranslate_combo = settings.get("hotkey_retranslate_combo", "<ctrl>+<alt>+r")
-        self.translation_timeout = settings.get("translation_timeout", 25)
+        self.hotkey_enabled = settings["hotkey_enabled"]
+        self.hotkey_combo = settings["hotkey_combo"]
+        self.hotkey_retranslate_combo = settings["hotkey_retranslate_combo"]
+        self.translation_timeout = settings["translation_timeout"]
 
     def _reconfigure_translator(self):
         """Пресъздава преводача според текущите настройки и го подава на контролера."""
         translator = create_translator(
             self.translation_api, self.translation_api_key,
-            ollama_model=self.ollama_model, ollama_url=self.ollama_url,
+            source_lang=argos.source_language(self.ocr_lang),
         )
         self.translation_controller.configure(translator, self.ocr_lang, self.target_lang)
 
@@ -201,8 +200,6 @@ class MainWindow(QtWidgets.QWidget):
         почти го докосваше). Вика се и при смяна на езика, защото
         дължината на текста е различна.
         """
-        if not hasattr(self, "translation_status"):
-            return
         icon_size = 22
         gap_after_text = 10
         btn = self.mark_translate_btn
@@ -235,7 +232,7 @@ class MainWindow(QtWidgets.QWidget):
         x += 230 + gap
 
         self.retranslate_btn = self._make_icon_button(
-            "retranslate_button_white.png", "", x, object_name="secondary_icon_btn"
+            "retranslate_button_white.png", x, object_name="secondary_icon_btn"
         )
         self.retranslate_btn.setEnabled(False)  # докато няма маркирана област
         x += h + gap
@@ -246,23 +243,24 @@ class MainWindow(QtWidgets.QWidget):
         x += 90 + gap
 
         self.play_btn = self._make_icon_button(
-            "play_button_white.png", "", x, width=40, object_name="secondary_icon_btn"
+            "play_button_white.png", x, width=40, object_name="secondary_icon_btn"
         )
+        self.play_btn.setEnabled(False)  # активен едва когато има превод за прочитане
         x += 40 + group_gap
 
         # --- други начини за превод ---
         self.text_translate_btn = self._make_icon_button(
-            "text_translate_button_white.png", "", x, object_name="secondary_icon_btn"
+            "text_translate_button_white.png", x, object_name="secondary_icon_btn"
         )
         x += h + gap
         self.history_btn = self._make_icon_button(
-            "history_button_white.png", "", x, object_name="secondary_icon_btn"
+            "history_button_white.png", x, object_name="secondary_icon_btn"
         )
         x += h + group_gap
 
         # --- изглед ---
         self.toggle_overlay_btn = self._make_icon_button(
-            "show_button_white.png", "", x, object_name="secondary_icon_btn"
+            "show_button_white.png", x, object_name="secondary_icon_btn"
         )
 
         self.translation_status = QtWidgets.QLabel(self)
@@ -270,7 +268,6 @@ class MainWindow(QtWidgets.QWidget):
         # Лежи върху бутона за превод - без това кликовете точно върху
         # спинъра не биха стигали до бутона отдолу.
         self.translation_status.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
-        self._position_translation_status()
         self.translation_status.hide()  # вижда се само докато тече превод
 
         # Бяла версия на spinner.png - контрастира добре на синия бутон.
@@ -288,16 +285,16 @@ class MainWindow(QtWidgets.QWidget):
         # --- вдясно, отдясно наляво ---
         step = 35
         right_x = self.bg_widget.x() + self.bg_widget.width() - 35
-        self.exit_btn = self._make_icon_button("close_button_white.png", "", right_x)
+        self.exit_btn = self._make_icon_button("close_button_white.png", right_x)
         right_x -= step
-        self.minimize_btn = self._make_icon_button("minimize_button_white.png", "", right_x)
+        self.minimize_btn = self._make_icon_button("minimize_button_white.png", right_x)
         right_x -= step
-        self.settings_btn = self._make_icon_button("settings_button_white.png", "", right_x)
+        self.settings_btn = self._make_icon_button("settings_button_white.png", right_x)
         right_x -= step
 
         # "Помощ" и "За програмата" са в едно меню - по-рядко се ползват,
         # а така освобождаваме място за новите бутони вляво.
-        self.help_btn = self._make_icon_button("help_button_white.png", "", right_x)
+        self.help_btn = self._make_icon_button("help_button_white.png", right_x)
         self.help_btn.setObjectName("menu_icon_btn")
         self.help_menu = QtWidgets.QMenu(self)
         self.help_action = self.help_menu.addAction("")
@@ -308,15 +305,14 @@ class MainWindow(QtWidgets.QWidget):
 
         self.update_ui_texts()
 
-    def _make_icon_button(self, icon_file, tooltip, x, y=10, size=30, width=None, object_name=None):
+    def _make_icon_button(self, icon_file, x, width=None, object_name=None):
         """
         Помощна функция: замества повтарящия се код за създаване на иконен
-        бутон. width (ако е различна от size) и object_name покриват и
+        бутон 30x30. width (по-широк бутон) и object_name покриват и
         нестандартните случаи (напр. play_btn - по-широк, със сив бокс стил).
         """
         btn = QtWidgets.QToolButton(self)
-        btn.setToolTip(tooltip)
-        btn.setGeometry(x, y, width or size, size)
+        btn.setGeometry(x, 10, width or 30, 30)
         btn.setIcon(QtGui.QIcon(image_path(icon_file)))
         btn.setIconSize(QtCore.QSize(15, 15))
         btn.setToolButtonStyle(QtCore.Qt.ToolButtonIconOnly)
@@ -325,13 +321,16 @@ class MainWindow(QtWidgets.QWidget):
         return btn
 
     def setup_text_display(self):
-        self.overlay_panel = OverlayPanel(alpha=self.overlay_opacity, radius=8, parent=self)
+        self.overlay_panel = OverlayPanel(alpha=self.overlay_opacity, parent=self)
         self.overlay_panel.setGeometry(10, 50, 780, 140)
 
         self.text_display = QtWidgets.QTextEdit(self.overlay_panel)
         self.text_display.setGeometry(0, 0, self.overlay_panel.width(), self.overlay_panel.height())
         self.text_display.setReadOnly(True)
         self.text_display.setFrameStyle(QtWidgets.QFrame.NoFrame)
+        # "Изчисти" е активен само когато има нещо за изчистване
+        self.text_display.textChanged.connect(self._update_clear_button)
+        self._update_clear_button()
 
         self.text_display.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
         self.text_display.setAutoFillBackground(False)
@@ -381,8 +380,6 @@ class MainWindow(QtWidgets.QWidget):
 
     def toggle_overlay_visibility(self):
         """Превключва видимостта на overlay панела (бутонът с окото)"""
-        if not (hasattr(self, "overlay_panel") and self.overlay_panel):
-            return
         self._set_overlay_panel_visible(not self.overlay_panel.isVisible())
 
     def _set_overlay_panel_visible(self, visible):
@@ -479,8 +476,7 @@ class MainWindow(QtWidgets.QWidget):
 
     def _preview_opacity(self, value):
         """Реагира на плъзгача за прозрачност веднага, преди да е натиснат Запази."""
-        if hasattr(self, "overlay_panel") and self.overlay_panel:
-            self.overlay_panel.set_alpha(value)
+        self.overlay_panel.set_alpha(value)
 
     def _collect_current_settings(self):
         """Текущото състояние на прозореца, представено като dict (за SettingsDialog)."""
@@ -490,8 +486,6 @@ class MainWindow(QtWidgets.QWidget):
             "overlay_opacity": self.overlay_opacity,
             "translation_api": self.translation_api,
             "translation_api_key": self.translation_api_key,
-            "ollama_model": self.ollama_model,
-            "ollama_url": self.ollama_url,
             "audio_lang": self.audio_lang,
             "audio_speed": self.audio_speed,
             "ocr_lang": self.ocr_lang,
@@ -509,25 +503,7 @@ class MainWindow(QtWidgets.QWidget):
 
     def apply_settings(self, settings):
         """Прилага вече валидирани настройки (извиква се от SettingsDialog.on_save)."""
-        self.text_size = settings["text_size"]
-        self.font_color = settings["font_color"]
-        self.translation_api = settings["translation_api"]
-        self.translation_api_key = settings["translation_api_key"]
-        self.ollama_model = settings["ollama_model"]
-        self.ollama_url = settings["ollama_url"]
-        self.audio_lang = settings["audio_lang"]
-        self.audio_speed = settings.get("audio_speed", 1.0)
-        self.ocr_lang = settings["ocr_lang"]
-        self.target_lang = settings["target_lang"] or "BG"
-        self.overlay_translation_enabled = settings["overlay_translation_enabled"]
-        self.preserve_font_size = settings["preserve_font_size"]
-        self.auto_refresh_enabled = settings["auto_refresh_enabled"]
-        self.refresh_interval_ms = settings["auto_refresh_interval"]
-        self.overlay_opacity = settings["overlay_opacity"]
-        self.hide_overlay_enabled = settings["hide_overlay_enabled"]
-        self.hotkey_enabled = settings.get("hotkey_enabled", False)
-        self.hotkey_combo = settings.get("hotkey_combo", "<ctrl>+<alt>+t")
-        self.hotkey_retranslate_combo = settings.get("hotkey_retranslate_combo", "")
+        self._load_settings_into_fields(settings)
         # Отметката "Автоматичен превод" не е в диалога с настройки, но
         # "Възстанови по подразбиране" трябва да я върне и нея.
         if "text_auto_translate" in settings:
@@ -535,11 +511,9 @@ class MainWindow(QtWidgets.QWidget):
             if self.text_window:
                 self.text_window.set_auto_translate(settings["text_auto_translate"])
         self._reconfigure_hotkey()
-        self.translation_timeout = settings.get("translation_timeout", 25)
         self.translation_controller.timeout_ms = self.translation_timeout * 1000
 
-        if hasattr(self, "overlay_panel") and self.overlay_panel:
-            self.overlay_panel.set_alpha(self.overlay_opacity)
+        self.overlay_panel.set_alpha(self.overlay_opacity)
 
         self.text_display.setStyleSheet(
             f"background: transparent; color: {self.font_color}; font-size:{self.text_size}px;"
@@ -568,26 +542,25 @@ class MainWindow(QtWidgets.QWidget):
         self.settings_manager.save(self.settings)
 
     def apply_overlay_visibility(self):
-        if not (hasattr(self, 'overlay_panel') and hasattr(self, 'toggle_overlay_btn')):
-            return
         self._set_overlay_panel_visible(not self.hide_overlay_enabled)
 
     # ------------------------------------------------------------------
     # Маркиране на област
     # ------------------------------------------------------------------
 
-    def start_selection(self, callback=None):
+    def start_selection(self, callback):
         """Стартира процеса на маркиране на област от екрана."""
         if self.selection_window and self.selection_window.isVisible():
             return  # вече се маркира (напр. hotkey-ят е натиснат два пъти)
         screenshot_qt = capture_full_screen_qimage()
         self.selection_window = SelectionWindow(screenshot_qt, hint_text=self.i18n.tr("selection_hint"))
-        self.selection_window.selection_made.connect(callback or self.save_selection)
+        self.selection_window.selection_made.connect(callback)
         self.selection_window.show()
 
     def save_selection(self, rect):
         self.selection_rect = rect
         self.retranslate_btn.setEnabled(True)
+        self._update_clear_button()
         self.text_display.append(
             f"{self.i18n.tr('area_marked')}: {rect.left()}, {rect.top()}, {rect.right()}, {rect.bottom()}"
         )
@@ -602,6 +575,11 @@ class MainWindow(QtWidgets.QWidget):
         # пасва на останалите икони в лентата.
         white_filename = icon_filename.replace(".png", "_white.png")
         self.play_btn.setIcon(QtGui.QIcon(image_path(white_filename)))
+
+    def _set_current_translation(self, text):
+        """Запомня последния превод и активира/деактивира play бутона спрямо него."""
+        self._current_translated_text = text or None
+        self.play_btn.setEnabled(bool(self._current_translated_text))
 
     def _on_audio_no_internet(self):
         """edge-tts е онлайн услуга - без връзка озвучаването не може да проработи."""
@@ -690,7 +668,7 @@ class MainWindow(QtWidgets.QWidget):
             )
         self._reshow_overlay_if_pending()
 
-    def _on_translation_finished(self, source_text, translated_text, from_cache, used_fallback,
+    def _on_translation_finished(self, source_text, translated_text, from_cache, fallback_used,
                                   font_size, rect):
         """Обработва завършването на превода (сигнал от TranslationController)."""
         self.set_translation_status(False)
@@ -701,11 +679,11 @@ class MainWindow(QtWidgets.QWidget):
         label = "detected_text_cash" if from_cache else "detected_text"
         self.text_display.append(f"{self.i18n.tr(label)}")
         self.text_display.append(source_text)
-        if used_fallback:
-            self.text_display.append(f"⚠ {self.i18n.tr('fallback_notice')}")
+        if fallback_used:
+            self.text_display.append(f"⚠ {self.i18n.tr(fallback_notice_key(fallback_used))}")
         self.text_display.append(f"{self.i18n.tr('translation')}")
         self.text_display.append(translated_text + "\n")
-        self._current_translated_text = translated_text
+        self._set_current_translation(translated_text)
         self._add_to_history(source_text, translated_text)
 
         if self.overlay_translation_enabled and translated_text:
@@ -721,7 +699,6 @@ class MainWindow(QtWidgets.QWidget):
         if self.translation_overlay is None:
             self.translation_overlay = SecondaryOverlay(
                 translated_text,
-                self._current_translated_text,
                 QtCore.QRect(rect.left(), rect.top(), rect.width(), rect.height()),
                 font_size=overlay_font_size,
                 font_color=self.font_color,
@@ -731,12 +708,14 @@ class MainWindow(QtWidgets.QWidget):
                 i18n=self.i18n,
             )
             self.translation_overlay.closed.connect(self._on_overlay_closed)
+            self._update_clear_button()
         elif translated_text != self.translation_overlay.text_label.text():
             self.translation_overlay.setText(translated_text)
 
     def _on_overlay_closed(self):
         self.refresh_timer.stop()
         self.translation_overlay = None
+        self._update_clear_button()
         # НЕ викаме self.show() тук - ако потребителят сам е минимизирал
         # главния прозорец (или overlay-ят се появи, докато той вече беше
         # минимизиран), затварянето на overlay-я не бива насила да го
@@ -756,13 +735,25 @@ class MainWindow(QtWidgets.QWidget):
     def clear_overlay(self):
         self.selection_rect = None
         self.retranslate_btn.setEnabled(False)
+        self.audio.stop()  # няма какво да се чете повече
+        self._set_current_translation(None)
         self.text_display.clear()
         self.refresh_timer.stop()
         self.translation_cache.clear()
         self._close_translation_overlay()  # ако има активен overlay - "Изчистване" значи всичко
+        self._update_clear_button()
+
+    def _update_clear_button(self):
+        """Активен, ако има текст в панела, маркирана област или отворен overlay."""
+        has_something = bool(
+            self.text_display.toPlainText().strip()
+            or self.selection_rect
+            or self.translation_overlay
+        )
+        self.clear_btn.setEnabled(has_something)
 
     # ------------------------------------------------------------------
-    # Tray + глобален hotkey (Windows и Linux/X11)
+    # Глобален hotkey (Windows и Linux/X11)
     # ------------------------------------------------------------------
 
     def _minimize_window(self):
@@ -853,7 +844,7 @@ class MainWindow(QtWidgets.QWidget):
         self.text_display.append(entry.source)
         self.text_display.append(self.i18n.tr("translation"))
         self.text_display.append(entry.translation + "\n")
-        self._current_translated_text = entry.translation
+        self._set_current_translation(entry.translation)
 
     def show_text_window(self):
         if self.text_window is None:

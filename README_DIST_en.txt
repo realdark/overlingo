@@ -74,15 +74,20 @@ First steps in the app
    handy for subtitles and text that changes.
 4. "Aa" opens a window for translating typed or pasted text, and the
    clock shows the translation history of the current session.
-5. "?" contains the full guide (Help) and information about the app.
+5. "?" contains the full guide (Help), information about the app and
+   "Check for updates".
 6. The gear icon opens Settings - choose your translation provider
-   (Google/DeepL/Microsoft/Ollama), target language, voice, hotkeys,
+   (Google/DeepL/Microsoft/offline), target language, voice, hotkeys,
    etc.
 
 No API key is needed by default - the built-in Google translation
 works right away. DeepL/Microsoft require your own key (paid services
-with a free tier), while Ollama is a fully offline option if you
-already have a local model installed.
+with a free tier). "On this computer (offline)" translates without
+internet: in Settings -> "Translation" press "Download offline
+languages" once (about 70 MB per language pair). Downloaded languages
+are also used automatically when the internet is down. They are kept
+in the "argos-models" folder next to the program - copy it over when
+you move to a new version so you don't download them again.
 
 
 Having trouble?
@@ -91,5 +96,7 @@ Having trouble?
   again" in the dialog.
 - The overlay/toolbar isn't visible -> check the "Hide overlay panel" /
   "Translate directly over text" settings.
+- The program closes by itself -> the cause is in app.log and crash.log
+  in the program folder; attach them when reporting the problem.
 - Anything else -> the in-app help section ("?") covers every feature
   in detail.

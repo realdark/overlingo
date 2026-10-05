@@ -8,7 +8,8 @@
 from utils.imports import json, os, edge_tts
 from utils.config import SETTINGS_FILE, DEFAULT_SETTINGS, OBSOLETE_SETTINGS
 from utils.logging_setup import logger
-from core.translations import create_translator, OllamaTranslator, NoInternetError
+from core.translations import create_translator, NoInternetError
+from core import argos
 from core.hotkey_manager import combo_error
 
 # Остават непроменени при "Възстанови настройките по подразбиране":
@@ -40,6 +41,9 @@ class SettingsManager:
             logger.error(f"Грешка при зареждане на настройки: {e}", exc_info=True)
         for key in OBSOLETE_SETTINGS:
             settings.pop(key, None)
+        # До 3.1 имаше Ollama - вече я няма; Google работи веднага, без настройка.
+        if settings.get("translation_api") == "ollama":
+            settings["translation_api"] = "google"
         return settings
 
     def defaults_for_reset(self, current):
@@ -81,8 +85,8 @@ class SettingsManager:
         api_key = settings["translation_api_key"]
         if api_type in ("deepl", "microsoft") and api_key:
             self._check_translator_key(api_type, api_key, settings["target_lang"])
-        elif api_type == "ollama":
-            self._check_ollama(settings.get("ollama_model"), settings.get("ollama_url"), settings["target_lang"])
+        elif api_type == "argos":
+            self._check_argos(settings["ocr_lang"], settings["target_lang"])
 
         if settings["audio_lang"]:
             self._check_audio_lang(settings["audio_lang"])
@@ -112,12 +116,14 @@ class SettingsManager:
         except Exception as e:
             raise SettingsValidationError("invalid_deepl_key", str(e)) from e
 
-    def _check_ollama(self, model, base_url, target_lang):
-        try:
-            translator = OllamaTranslator(model=model, base_url=base_url)
-            translator.translate("Test", target_lang)
-        except Exception as e:
-            raise SettingsValidationError("invalid_ollama_config", str(e)) from e
+    def _check_argos(self, ocr_lang, target_lang):
+        """Преводът без интернет иска библиотеките и свалени модели за езиците."""
+        if not argos.libraries_available():
+            raise SettingsValidationError("argos_not_installed")
+        source = argos.source_language(ocr_lang)
+        target = (target_lang or "").strip().lower()[:2]
+        if argos.find_route(source, target, argos.installed_pairs()) is None:
+            raise SettingsValidationError("argos_models_needed", argos.pair_label((source, target)))
 
     def _check_audio_lang(self, audio_lang):
         try:

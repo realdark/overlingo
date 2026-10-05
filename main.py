@@ -2,6 +2,20 @@
 ВХОДНА ТОЧКА НА ПРИЛОЖЕНИЕТО
 """
 
+import sys
+
+# Windows: ctranslate2 (превод без интернет) се зарежда ПРЕДИ PyQt5/OpenCV.
+# PyQt5 носи по-стара версия на C++ библиотеката msvcp140.dll; ако тя е
+# заредена първа, ctranslate2 (компилиран с по-нова) я ползва и при първия
+# превод процесът пада без никаква грешка. Заредена първа, по-новата
+# системна версия важи за всички.
+if sys.platform == "win32":
+    try:
+        import ctranslate2  # noqa: F401
+        import sentencepiece  # noqa: F401
+    except Exception:
+        pass  # не са инсталирани - преводът без интернет просто няма да е наличен
+
 from utils.imports import sys, os, QtWidgets, QtGui, QtCore
 from utils.logging_setup import logger
 from utils.config import THEME_FILE, APP_ICON_LINUX, BASE_DIR
