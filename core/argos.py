@@ -23,10 +23,10 @@ import threading
 import zipfile
 from pathlib import Path
 
-from utils.config import BASE_DIR
+from utils.config import DATA_DIR
 from utils.logging_setup import logger
 
-MODELS_DIR = BASE_DIR / "argos-models"
+MODELS_DIR = DATA_DIR / "argos-models"
 INDEX_URL = "https://raw.githubusercontent.com/argosopentech/argospm-index/main/index.json"
 # Сървърът с моделите връща 403 на заявки с подписа на Python - представяме се като браузър.
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"

@@ -120,6 +120,7 @@ core/                       Логика без интерфейс (тества
   localization.py           Зареждане на текстовете от assets/locales
   argos.py                  Превод без интернет (моделите на Argos Translate)
   argos_download.py         Сваляне на моделите за превод без интернет
+  selftest.py               Автоматична проверка на билда (overlingo --self-test)
   tessdata_download.py      Изтегляне на Tesseract езикови данни
   hotkey_manager.py         Глобални hotkey-и (Windows, Linux/X11)
   single_instance.py        Само едно отворено копие
@@ -143,6 +144,9 @@ assets/
   images/, icons/            Икони
 tests/                       Тестове (unittest)
 tools/fix_qt_runtime.py      Windows: сменя стария msvcp140.dll на PyQt5 (пуска се от build.bat)
+tools/fetch_argos_model.py   Сваля модел за превод без интернет (за проверката в GitHub Actions)
+.github/workflows/build.yml  Автоматичен билд + проверка за Windows/Linux/macOS
+build_macos.sh               Билд за macOS (Overlingo.app)
 install.sh                   Linux: стартер за двоен клик и меню с приложения
 README_DIST_*.txt            README за потребителя, влиза в build-а
 ```
@@ -150,8 +154,9 @@ README_DIST_*.txt            README за потребителя, влиза в b
 ## Build (самостоятелен .exe/binary)
 
 ```
-build.bat     Windows (PyInstaller, onedir)
-build.sh      Linux (PyInstaller, onedir)
+build.bat        Windows (PyInstaller, onedir)
+build.sh         Linux (PyInstaller, onedir)
+build_macos.sh   macOS (PyInstaller, Overlingo.app; пуска се на Mac)
 ```
 
 Изисква `pip install pyinstaller` предварително и активирана виртуална
@@ -164,13 +169,37 @@ build.sh      Linux (PyInstaller, onedir)
 `settings.json` нарочно НЕ се копира в build-а — приложението си генерира
 чист файл при първо стартиране (виж `core/settings_manager.py`).
 
+На macOS `assets` е вътре в `.app` пакета, а настройките, логовете и
+моделите - в `~/Library/Application Support/Overlingo` (пакетът не се
+променя). Виж `get_resource_dir()` / `get_data_dir()` в `utils/config.py`.
+
+### Автоматичен билд (GitHub Actions)
+
+`.github/workflows/build.yml` билдва за Windows, Linux, macOS (Apple
+Silicon) и macOS (Intel) на машините на GitHub - безплатно за публично
+хранилище. За всяка система: тестове → билд → сваляне на малък модел за
+превод без интернет → `overlingo --self-test` върху готовия билд
+(`core/selftest.py`: библиотеки, Qt, Tesseract, разпознаване на текст,
+превод без интернет, главният прозорец).
+
+- Пробен билд: GitHub → Actions → **Build** → **Run workflow**. Архивите са
+  в "Artifacts" на страницата на изпълнението (пазят се 14 дни).
+- Публикуван release: архивите се прикачват към него автоматично. Тагът
+  трябва да е `v` + `APP_VERSION`, иначе билдът спира (проверката за нова
+  версия в програмата разчита на това).
+
+Проверката може да се пусне и ръчно върху билд:
+`overlingo --self-test [--argos-models ПАПКА] [--require-argos]`.
+
 ## Пускане на нова версия
 
 1. Смени номера в `utils/version.py` (формат `3.1`, `3.2`, `3.0.1` - без
    водещи нули; сравнява се числово).
-2. Билд на Windows (`build.bat`) и на Linux (`build.sh`).
+2. Commit и push.
 3. GitHub → Releases → нов release с tag **`v` + същия номер** (напр.
-   `v3.1`), прикачи двата архива от `dist/`.
+   `v3.3`) → Publish. GitHub Actions сам билдва за Windows, Linux и macOS
+   и прикача архивите към release-а (около 15-20 минути). Ръчният билд
+   с `build.bat` / `build.sh` остава възможен.
 
 "Провери за нова версия" в програмата чете последния публикуван release
 и сравнява tag-а му с `utils/version.py` - ако двата се разминават,
@@ -184,7 +213,7 @@ build.sh      Linux (PyInstaller, onedir)
 краищата на редовете: `.sh` винаги с Linux (LF), `.bat` с Windows
 (CRLF) - иначе скриптовете гърмят, ако минат през другата система. При
 качване от Windows `build.sh` и `install.sh` губят флага "изпълним":
-`git update-index --chmod=+x build.sh install.sh` веднъж го оправя.
+`git update-index --chmod=+x build.sh build_macos.sh install.sh` веднъж го оправя.
 
 ## Логове
 

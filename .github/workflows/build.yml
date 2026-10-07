@@ -1,0 +1,175 @@
+# Билд и автоматична проверка на Overlingo за Windows, Linux и macOS.
+#
+# Кога тръгва:
+#   - ръчно: Actions -> "Build" -> "Run workflow" (пробен билд; архивите са
+#     в "Artifacts" долу на страницата на изпълнението, пазят се 14 дни);
+#   - при публикуван release в GitHub: билдва и прикача архивите към него.
+#     Тагът трябва да е "v" + APP_VERSION от utils/version.py (напр. v3.3) -
+#     иначе проверката за нова версия в програмата греши, затова билдът спира.
+#
+# За всяка система: тестове -> билд -> сваляне на малък модел за превод без
+# интернет -> "overlingo --self-test" върху ГОТОВИЯ билд (виж core/selftest.py).
+
+name: Build
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+      - name: Python packages
+        run: pip install -r requirements.txt
+      - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -m unittest discover -s tests -t . -v
+
+  version:
+    name: Check release tag
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag must be v + APP_VERSION
+        run: |
+          VERSION="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' utils/version.py)"
+          TAG="${{ github.event.release.tag_name }}"
+          echo "APP_VERSION=$VERSION, tag=$TAG"
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Тагът $TAG не съвпада с APP_VERSION $VERSION (очаквах v$VERSION) - смени utils/version.py или тага."
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: [version]
+    # При ръчно пускане "version" се пропуска - билдът тръгва въпреки това.
+    if: ${{ !failure() && !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-2022
+          - name: Linux
+            os: ubuntu-22.04        # по-стар glibc - билдът тръгва и на по-стари дистрибуции
+          - name: macOS Apple Silicon
+            os: macos-14
+          - name: macOS Intel
+            os: macos-15-intel
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Tesseract and system libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+      - name: Tesseract (Windows)
+        if: runner.os == 'Windows'
+        run: choco install tesseract -y --no-progress
+      - name: Tesseract (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract
+
+      - name: Python packages
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: call build.bat
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: bash build.sh
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: bash build_macos.sh
+
+      - name: Download a model for the offline translation check
+        shell: bash
+        run: python tools/fetch_argos_model.py "$RUNNER_TEMP/argos-models" en de
+
+      - name: Self-test of the built app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          # Билдът е без конзола - резултатът е във файла и в кода на изхода.
+          $log = Join-Path $env:RUNNER_TEMP "selftest.log"
+          $models = Join-Path $env:RUNNER_TEMP "argos-models"
+          $p = Start-Process -FilePath "dist\overlingo\overlingo.exe" -Wait -PassThru `
+            -ArgumentList "--self-test", "--require-argos", "--argos-models", $models, "--log", $log
+          if (Test-Path $log) { Get-Content $log } else { Write-Host "Няма selftest.log - програмата не е стигнала до проверката" }
+          exit $p.ExitCode
+      - name: Self-test of the built app (Linux)
+        if: runner.os == 'Linux'
+        timeout-minutes: 10
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: dist/overlingo/overlingo --self-test --require-argos --argos-models "$RUNNER_TEMP/argos-models" --log "$RUNNER_TEMP/selftest.log"
+      - name: Self-test of the built app (macOS)
+        if: runner.os == 'macOS'
+        timeout-minutes: 10
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: dist/Overlingo.app/Contents/MacOS/Overlingo --self-test --require-argos --argos-models "$RUNNER_TEMP/argos-models" --log "$RUNNER_TEMP/selftest.log"
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: Overlingo-${{ matrix.os }}
+          path: |
+            dist/Overlingo-*.zip
+            dist/Overlingo-*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Logs when something failed
+        if: failure()
+        shell: bash
+        run: |
+          for f in "$RUNNER_TEMP/selftest.log" dist/overlingo/app.log dist/overlingo/crash.log \
+                   "$HOME/Library/Application Support/Overlingo/app.log" \
+                   "$HOME/Library/Application Support/Overlingo/crash.log"; do
+            if [ -f "$f" ]; then echo "===== $f"; cat "$f"; fi
+          done
+
+  release:
+    name: Attach to release
+    needs: [build]
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Attach archives
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: artifacts/*

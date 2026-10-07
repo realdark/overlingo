@@ -60,8 +60,23 @@ How to run it
 
               ./overlingo
 
-The first launch creates its own settings file next to the executable -
-nothing else needs to be configured beforehand.
+  macOS:    Drag Overlingo.app to Applications. The first time, open it
+            with right-click -> Open -> Open (the app is not signed with
+            a paid Apple developer certificate, so a plain double-click
+            only shows a warning). After that it opens normally.
+
+            The first time you translate from the screen, macOS asks for
+            "Screen Recording" permission: System Settings -> Privacy &
+            Security -> Screen Recording -> turn on Overlingo, then
+            restart the app. Without it the captured area is empty.
+
+            Settings, logs and offline models are kept in
+            ~/Library/Application Support/Overlingo (not in the app).
+            Global hotkeys are not available on macOS yet.
+
+The first launch creates its own settings file next to the executable
+(on macOS: in ~/Library/Application Support/Overlingo) - nothing else
+needs to be configured beforehand.
 
 
 First steps in the app
@@ -97,6 +112,9 @@ Having trouble?
 - The overlay/toolbar isn't visible -> check the "Hide overlay panel" /
   "Translate directly over text" settings.
 - The program closes by itself -> the cause is in app.log and crash.log
-  in the program folder; attach them when reporting the problem.
+  in the program folder (macOS: ~/Library/Application Support/Overlingo);
+  attach them when reporting the problem.
+- macOS: the translated area is empty/black -> allow "Screen Recording"
+  for Overlingo (see "How to run it") and restart the app.
 - Anything else -> the in-app help section ("?") covers every feature
   in detail.

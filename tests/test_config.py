@@ -70,3 +70,42 @@ class DefaultSettingsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AppFoldersTest(unittest.TestCase):
+    """Къде са assets и къде се пишат настройките - различно в macOS .app пакета."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def _frozen(self, platform, executable, meipass=None):
+        patches = [
+            mock.patch.object(config.sys, "frozen", True, create=True),
+            mock.patch.object(config.sys, "platform", platform),
+            mock.patch.object(config.sys, "executable", str(executable)),
+        ]
+        if meipass is not None:
+            patches.append(mock.patch.object(config.sys, "_MEIPASS", str(meipass), create=True))
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def test_windows_linux_keep_everything_next_to_the_program(self):
+        (self.dir / "assets").mkdir()
+        self._frozen("win32", self.dir / "overlingo.exe")
+        self.assertEqual(config.get_resource_dir(), self.dir)
+        self.assertEqual(config.get_data_dir(), self.dir)
+
+    def test_macos_app_reads_bundled_assets_and_writes_to_application_support(self):
+        macos = self.dir / "Overlingo.app" / "Contents" / "MacOS"
+        frameworks = self.dir / "Overlingo.app" / "Contents" / "Frameworks"
+        (frameworks / "assets").mkdir(parents=True)
+        macos.mkdir(parents=True)
+        self._frozen("darwin", macos / "Overlingo", meipass=frameworks)
+        home = self.dir / "home"
+        with mock.patch.object(config.Path, "home", return_value=home):
+            self.assertEqual(config.get_resource_dir(), frameworks)
+            self.assertEqual(config.get_data_dir(), home / "Library" / "Application Support" / "Overlingo")
+            self.assertTrue(config.get_data_dir().is_dir())

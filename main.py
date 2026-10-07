@@ -59,6 +59,10 @@ def show_splash(app):
 
 def main():
     """Основна функция на приложението"""
+    if "--self-test" in sys.argv:
+        # Автоматична проверка на билда (GitHub Actions) - виж core/selftest.py.
+        from core.selftest import run_self_test
+        return run_self_test(sys.argv)
     try:
         # Работна папка = папката на програмата, независимо откъде е
         # стартирана (меню с приложения, пряк път, друга папка в

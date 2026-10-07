@@ -13,13 +13,48 @@ def get_base_dir():
         # Некомпилирана версия - използваме нормалния път
         return Path(__file__).resolve().parent.parent
 
+def get_resource_dir():
+    """
+    Папката, в която е "assets". Обикновено до програмата (build.sh/build.bat
+    я копират там). В macOS .app пакета е вътре в пакета (PyInstaller я
+    слага там с --add-data) - намира се през sys._MEIPASS.
+    """
+    base = get_base_dir()
+    if (base / "assets").is_dir():
+        return base
+    bundled = getattr(sys, "_MEIPASS", None)
+    if bundled and (Path(bundled) / "assets").is_dir():
+        return Path(bundled)
+    return base
+
+
+def get_data_dir():
+    """
+    Къде се пишат настройките, логовете и моделите за превод без интернет.
+    До програмата (така е и досега на Windows/Linux - всичко е в една папка).
+    Изключение: компилираната версия за macOS - .app пакетът не бива да се
+    променя (често е в /Applications без права за запис, а и подписът му се
+    чупи), затова там е ~/Library/Application Support/Overlingo.
+    """
+    if getattr(sys, "frozen", False) and sys.platform == "darwin":
+        data = Path.home() / "Library" / "Application Support" / "Overlingo"
+        try:
+            data.mkdir(parents=True, exist_ok=True)
+            return data
+        except OSError:
+            pass
+    return get_base_dir()
+
+
 # Динамични пътища
 BASE_DIR = get_base_dir()
-SETTINGS_FILE = BASE_DIR / "settings.json"
-LOCALES_DIR = BASE_DIR / "assets" / "locales"
-THEME_FILE = BASE_DIR / "assets" / "theme.qss"
-ICON_DIR = BASE_DIR / "assets" / "icons"
-IMAGES_DIR = BASE_DIR / "assets" / "images"
+RESOURCE_DIR = get_resource_dir()
+DATA_DIR = get_data_dir()
+SETTINGS_FILE = DATA_DIR / "settings.json"
+LOCALES_DIR = RESOURCE_DIR / "assets" / "locales"
+THEME_FILE = RESOURCE_DIR / "assets" / "theme.qss"
+ICON_DIR = RESOURCE_DIR / "assets" / "icons"
+IMAGES_DIR = RESOURCE_DIR / "assets" / "images"
 
 
 def image_path(filename):

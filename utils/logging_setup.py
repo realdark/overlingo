@@ -13,12 +13,12 @@ import sys
 import threading
 from logging.handlers import RotatingFileHandler
 
-from utils.config import BASE_DIR
+from utils.config import DATA_DIR
 
-LOG_FILE = BASE_DIR / "app.log"
+LOG_FILE = DATA_DIR / "app.log"
 # Сривове в C/C++ библиотеките (ctranslate2, OpenCV...) убиват процеса без
 # Python грешка - faulthandler записва тук къде е станал сривът.
-CRASH_FILE = BASE_DIR / "crash.log"
+CRASH_FILE = DATA_DIR / "crash.log"
 
 _LOGGER_NAME = "overlingo"
 _configured = False
