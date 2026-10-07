@@ -115,24 +115,16 @@ def run_self_test(argv):
     tesseract_ok = report.run("tesseract", tesseract) is not None
 
     def ocr():
-        if not tesseract_ok or "app" not in state:
-            return ("SKIP", "няма Tesseract или Qt")
+        if not tesseract_ok:
+            return ("SKIP", "няма Tesseract")
+        import cv2
         import numpy as np
         import pytesseract
-        from PyQt5 import QtGui, QtCore
-        image = QtGui.QImage(1000, 180, QtGui.QImage.Format_RGB32)
-        image.fill(QtCore.Qt.white)
-        painter = QtGui.QPainter(image)
-        font = QtGui.QFont()
-        font.setPixelSize(72)
-        painter.setFont(font)
-        painter.setPen(QtCore.Qt.black)
-        painter.drawText(image.rect(), QtCore.Qt.AlignCenter, "Hello world 2026")
-        painter.end()
-        gray = image.convertToFormat(QtGui.QImage.Format_Grayscale8)
-        pointer = gray.constBits()
-        pointer.setsize(gray.byteCount())
-        array = np.frombuffer(pointer, np.uint8).reshape(gray.height(), gray.bytesPerLine())[:, :gray.width()].copy()
+        # Текстът се рисува с вградения шрифт на OpenCV, не с Qt: в режим
+        # "offscreen" (без екран) Qt на Windows няма шрифтове и картинката
+        # оставаше празна.
+        array = np.full((180, 1100), 255, np.uint8)
+        cv2.putText(array, "Hello world 2026", (30, 120), cv2.FONT_HERSHEY_DUPLEX, 2.6, 0, 5, cv2.LINE_AA)
         text = pytesseract.image_to_string(array, lang="eng").strip()
         if "hello" not in text.lower():
             raise RuntimeError(f"очаквах 'Hello world 2026', разпознато: {text!r}")
