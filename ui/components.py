@@ -7,9 +7,13 @@ from utils.config import image_path
 from core.audio_playback import AudioPlaybackToggle
 from core.fullscreen_detector import FullscreenDetector
 
-def _warn_audio_needs_internet(parent, i18n):
-    """edge-tts is an online service - text-to-speech cannot work without a connection."""
-    QtWidgets.QMessageBox.warning(parent, i18n.tr("warning_title"), i18n.tr("audio_requires_internet"))
+def _show_audio_notice(parent, i18n, key):
+    """
+    Messages from the playback (see AudioPlaybackToggle): no voice / no internet
+    as a warning; "reading with the online voice" only as information.
+    """
+    show = QtWidgets.QMessageBox.information if key == "tts_fallback_online" else QtWidgets.QMessageBox.warning
+    show(parent, i18n.tr("warning_title"), i18n.tr(key))
 
 
 class OverlayPanel(QtWidgets.QWidget):
@@ -147,16 +151,14 @@ class WindowDragFilter(QtCore.QObject):
 class SecondaryOverlay(QtWidgets.QFrame):
     closed = QtCore.pyqtSignal()
 
-    def __init__(self, text, rect, i18n, font_size=14, font_color="#FFFFFF", background_opacity=200, audio_lang="", audio_speed=1.0):
+    def __init__(self, text, rect, i18n, get_audio_settings, font_size=14, font_color="#FFFFFF", background_opacity=200):
         super().__init__()
 
-        self.audio_lang = audio_lang
-        self.audio_speed = audio_speed
+        # callback() -> AudioOptions from the current settings (they may change while the overlay is open)
+        self._get_audio_settings = get_audio_settings
         self.i18n = i18n
         self._current_translated_text = text  # for "Copy" and "Read aloud"; updated in setText()
-        self._audio = AudioPlaybackToggle(
-            set_icon=self._set_play_button_icon, on_no_internet=self._on_audio_no_internet
-        )
+        self._audio = AudioPlaybackToggle(set_icon=self._set_play_button_icon, on_notice=self._on_audio_notice)
         self.original_rect = rect
 
         # Store the parameters for setup_ui
@@ -302,14 +304,14 @@ class SecondaryOverlay(QtWidgets.QFrame):
         self.play_btn.setIcon(QtGui.QIcon(image_path(icon_filename)))
 
     def toggle_audio(self):
-        self._audio.toggle(self._current_translated_text, self.audio_lang, self.audio_speed)
+        self._audio.toggle(self._current_translated_text, self._get_audio_settings())
 
     def copy_text(self):
         """Copies the current translation to the clipboard - easier than selecting it by hand on the floating overlay."""
         QtWidgets.QApplication.clipboard().setText(self._current_translated_text)
 
-    def _on_audio_no_internet(self):
-        _warn_audio_needs_internet(self, self.i18n)
+    def _on_audio_notice(self, key):
+        _show_audio_notice(self, self.i18n, key)
 
     def closeEvent(self, event):
         self.fullscreen_detector.stop()
@@ -321,7 +323,7 @@ class SecondaryOverlay(QtWidgets.QFrame):
 class AudioButton(QtWidgets.QPushButton):
     """
     Play/stop button (icon only) for the history and text translation windows.
-    get_text() returns the text to read, get_audio_settings() - (voice, rate)
+    get_text() returns the text to read, get_audio_settings() - AudioOptions
     from the current settings (they may change while the window is open).
     """
 
@@ -330,7 +332,7 @@ class AudioButton(QtWidgets.QPushButton):
         self.i18n = i18n
         self._get_text = get_text
         self._get_audio_settings = get_audio_settings
-        self._audio = AudioPlaybackToggle(set_icon=self._set_icon, on_no_internet=self._on_no_internet)
+        self._audio = AudioPlaybackToggle(set_icon=self._set_icon, on_notice=self._on_notice)
         self._set_icon("play_button.png")
         self.clicked.connect(self._toggle)
 
@@ -341,11 +343,7 @@ class AudioButton(QtWidgets.QPushButton):
         self.setToolTip(self.i18n.tr("stop_audio" if playing else "read_aloud"))
 
     def _toggle(self):
-        voice, speed = self._get_audio_settings()
-        if not voice and not self._audio.is_playing():
-            QtWidgets.QMessageBox.information(self.window(), self.i18n.tr("warning_title"), self.i18n.tr("no_audio_lang"))
-            return
-        self._audio.toggle(self._get_text(), voice, speed)
+        self._audio.toggle(self._get_text(), self._get_audio_settings())
 
     def stop(self):
         self._audio.stop()
@@ -354,8 +352,8 @@ class AudioButton(QtWidgets.QPushButton):
         """Updates the button for the UI language and whether audio is currently playing."""
         self._set_icon("stop_button.png" if self._audio.is_playing() else "play_button.png")
 
-    def _on_no_internet(self):
-        _warn_audio_needs_internet(self.window(), self.i18n)
+    def _on_notice(self, key):
+        _show_audio_notice(self.window(), self.i18n, key)
 
 
 class CopyButton(QtWidgets.QPushButton):

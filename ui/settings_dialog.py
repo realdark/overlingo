@@ -12,6 +12,7 @@ from core.argos_download import ArgosDownloadThread
 from core import argos
 from core.tessdata_download import TessdataDownloadThread
 from core.audio_handler import EdgeVoicesThread
+from core.system_tts import SystemSpeech
 from core.hotkey_manager import HOTKEY_SUPPORTED
 from utils.logging_setup import logger
 
@@ -119,6 +120,15 @@ class SettingsDialog(QtWidgets.QDialog):
                     grid.addWidget(tessdata_link, row, 1)
                     row += 1
 
+                if spec["name"] == "audio_speed_combo":
+                    # Which voice on this computer reads the translation language -
+                    # or that there is none and the online voice is used instead.
+                    self.system_voice_label = QtWidgets.QLabel("")
+                    self.system_voice_label.setObjectName("muted_label")
+                    self.system_voice_label.setWordWrap(True)
+                    grid.addWidget(self.system_voice_label, row, 1)
+                    row += 1
+
                 if spec["name"] == "target_edit":
                     # Offline translation (Argos): models are per language pair
                     # (source language -> target language) and are downloaded here. They also
@@ -149,6 +159,10 @@ class SettingsDialog(QtWidgets.QDialog):
 
         main_layout.addWidget(tabs)
         self._start_voices_fetch()
+        self._system_speech = None
+        self._refresh_system_voice()
+        self.widgets["target_edit"].editingFinished.connect(self._refresh_system_voice)
+        self.widgets["tts_engine_combo"].currentIndexChanged.connect(self._refresh_system_voice)
 
         self._wire_dependencies()
 
@@ -251,6 +265,16 @@ class SettingsDialog(QtWidgets.QDialog):
             self._configure_combo_completer(w)
             return w
 
+        def tts_engine_combo():
+            # Who reads the translation: the computer's own voices (offline, default)
+            # or Microsoft Edge (online, natural voices) - see core/audio_playback.py.
+            w = QtWidgets.QComboBox()
+            w.addItem(self.i18n.tr("tts_engine_system"), "system")
+            w.addItem(self.i18n.tr("tts_engine_edge"), "edge")
+            idx = w.findData(s.get("tts_engine", "system"))
+            w.setCurrentIndex(idx if idx >= 0 else 0)
+            return w
+
         def audio_speed_combo():
             # Preset values like on YouTube (0.5x-2x), instead of raw
             # percentages - easier for the user to understand. Converted to
@@ -298,6 +322,7 @@ class SettingsDialog(QtWidgets.QDialog):
             {"name": "ocr_combo", "label_key": "ocr_lang_label", "make": ocr_lang_combo, "tab": "translation"},
             {"name": "target_edit", "label_key": "target_lang_label", "make": line_edit("target_lang", "", "target_lang_placeholder"), "tab": "translation"},
             {"name": "timeout_spin", "label_key": "translation_timeout_label", "make": timeout_spin, "tab": "translation"},
+            {"name": "tts_engine_combo", "label_key": "tts_engine_label", "make": tts_engine_combo, "tab": "audio"},
             {"name": "audio_combo", "label_key": "audio_lang_label", "make": audio_lang_combo, "tab": "audio"},
             {"name": "audio_speed_combo", "label_key": "audio_speed_label", "make": audio_speed_combo, "tab": "audio"},
         ]
@@ -364,6 +389,7 @@ class SettingsDialog(QtWidgets.QDialog):
             "translation_api_key": w["translation_edit"].text().strip(),
             "audio_lang": w["audio_combo"].currentText().strip(),
             "audio_speed": w["audio_speed_combo"].currentData(),
+            "tts_engine": w["tts_engine_combo"].currentData(),
             "ocr_lang": w["ocr_combo"].currentData() or "eng",
             "target_lang": w["target_edit"].text().strip() or "BG",
             "translation_timeout": w["timeout_spin"].value(),
@@ -384,6 +410,18 @@ class SettingsDialog(QtWidgets.QDialog):
             # empty = no hotkey for "Translate again"
             result["hotkey_retranslate_combo"] = w["hotkey_retranslate_edit"].text().strip()
         return result
+
+    def _refresh_system_voice(self, _index=None):
+        """Shows which voice on this computer will read the translation language."""
+        target = self.widgets["target_edit"].text().strip() or "BG"
+        if self.widgets["tts_engine_combo"].currentData() != "system":
+            self.system_voice_label.setText(self.i18n.tr("tts_edge_info"))
+            return
+        if self._system_speech is None:
+            self._system_speech = SystemSpeech(self)
+        voice = self._system_speech.voice_name(target)
+        key = "tts_system_voice" if voice else "tts_system_no_voice"
+        self.system_voice_label.setText(self.i18n.tr(key).format(lang=target.upper(), voice=voice))
 
     def _start_voices_fetch(self):
         """Fetches the edge-tts voice list in the background (doesn't block the dialog)."""
@@ -573,7 +611,7 @@ class SettingsDialog(QtWidgets.QDialog):
         new_settings.update(self.values())
 
         try:
-            self.settings_manager.validate(new_settings)
+            self.settings_manager.validate(new_settings, previous=self.current)
         except SettingsValidationError as e:
             detail = f"\n{e.detail}" if e.detail else ""
             QtWidgets.QMessageBox.critical(

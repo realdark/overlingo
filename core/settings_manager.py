@@ -73,10 +73,12 @@ class SettingsManager:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    def validate(self, settings):
+    def validate(self, settings, previous=None):
         """
         Validates settings before applying them.
         Raises SettingsValidationError on a problem; returns nothing on success.
+        previous - the settings before the change (to check the offline models only
+        when the user switches to offline translation - see _check_argos).
         """
         if settings["hide_overlay_enabled"] and not settings["overlay_translation_enabled"]:
             raise SettingsValidationError("overlay_hide_warning")
@@ -86,7 +88,12 @@ class SettingsManager:
         if api_type in ("deepl", "microsoft") and api_key:
             self._check_translator_key(api_type, api_key, settings["target_lang"])
         elif api_type == "argos":
-            self._check_argos(settings["ocr_lang"], settings["target_lang"])
+            # Missing models block saving only when switching to offline translation
+            # just now. It is the default, so otherwise every save (e.g. a font
+            # change) would be refused until the languages are downloaded - they
+            # are offered for download on the first translation anyway.
+            switched = previous is None or previous.get("translation_api") != "argos"
+            self._check_argos(settings["ocr_lang"], settings["target_lang"], check_models=switched)
 
         if settings["audio_lang"]:
             self._check_audio_lang(settings["audio_lang"])
@@ -116,10 +123,12 @@ class SettingsManager:
         except Exception as e:
             raise SettingsValidationError("invalid_deepl_key", str(e)) from e
 
-    def _check_argos(self, ocr_lang, target_lang):
+    def _check_argos(self, ocr_lang, target_lang, check_models=True):
         """Offline translation needs the libraries and downloaded models for the languages."""
         if not argos.libraries_available():
             raise SettingsValidationError("argos_not_installed")
+        if not check_models:
+            return
         source = argos.source_language(ocr_lang)
         target = (target_lang or "").strip().lower()[:2]
         if argos.find_route(source, target, argos.installed_pairs()) is None:

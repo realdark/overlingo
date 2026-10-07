@@ -54,6 +54,20 @@ class SettingsManagerTest(unittest.TestCase):
              mock.patch.object(settings_manager.argos, "installed_pairs", return_value={("en", "bg")}):
             self.manager.validate(settings)  # no error
 
+    def test_missing_offline_models_block_only_when_switching_to_offline(self):
+        settings = dict(DEFAULT_SETTINGS, translation_api="argos", ocr_lang="eng", target_lang="BG")
+        with mock.patch.object(settings_manager.argos, "libraries_available", return_value=True), \
+             mock.patch.object(settings_manager.argos, "installed_pairs", return_value=set()):
+            # Already offline (the default) - e.g. a font change is saved; the models are offered later.
+            self.manager.validate(settings, previous=dict(settings))
+            with self.assertRaises(SettingsValidationError) as ctx:
+                self.manager.validate(settings, previous=dict(settings, translation_api="google"))
+            self.assertEqual(ctx.exception.message_key, "argos_models_needed")
+
+    def test_defaults_are_offline(self):
+        self.assertEqual(DEFAULT_SETTINGS["translation_api"], "argos")
+        self.assertEqual(DEFAULT_SETTINGS["tts_engine"], "system")
+
     def test_corrupted_file_falls_back_to_defaults(self):
         self.path.write_text("{ not json", encoding="utf-8")
         self.assertEqual(self.manager.load(), DEFAULT_SETTINGS)

@@ -21,7 +21,7 @@ class HistoryWindow(QtWidgets.QDialog):
     """
     history:            core.history.TranslationHistory
     on_show:            callback(entry) - "Show" (shows the translation in the toolbar panel)
-    get_audio_settings: callback() -> (voice, rate)
+    get_audio_settings: callback() -> AudioOptions (engine, voice, speed, language)
     stats:              core.history.SessionStats - statistics row at the bottom
     """
 

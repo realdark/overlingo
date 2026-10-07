@@ -139,6 +139,19 @@ def run_self_test(argv):
 
     report.run("argos-libraries", argos_libraries)
 
+    def system_tts():
+        if "app" not in state:
+            return ("SKIP", "no Qt")
+        from PyQt5 import QtTextToSpeech  # must be in the build (offline reading)
+        engines = list(QtTextToSpeech.QTextToSpeech.availableEngines())
+        if not engines:
+            return ("SKIP", "Qt TextToSpeech is bundled, but this machine has no speech engine")
+        engine = QtTextToSpeech.QTextToSpeech()
+        locales = sorted({loc.name() for loc in engine.availableLocales()})
+        return f"engines {engines}, {len(locales)} locale(s): {', '.join(locales[:8])}"
+
+    report.run("system-tts", system_tts)
+
     def argos_translate():
         from core import argos
         pairs = sorted(argos.installed_pairs(models_dir))

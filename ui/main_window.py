@@ -11,10 +11,11 @@ from utils.logging_setup import logger
 from utils.config import image_path
 from core.translations import TranslationCache, create_translator, fallback_notice_key
 from core import argos
+from core.argos_download import ArgosDownloadThread
 from core.translation_controller import TranslationController
 from core.settings_manager import SettingsManager
 from core.localization import UiLocalizer
-from core.audio_playback import AudioPlaybackToggle
+from core.audio_playback import AudioPlaybackToggle, AudioOptions
 from core.capture import capture_full_screen_qimage, warm_up
 from ui.components import SelectionWindow, WindowDragFilter, SecondaryOverlay, OverlayPanel
 from ui.settings_dialog import SettingsDialog
@@ -62,9 +63,7 @@ class MainWindow(QtWidgets.QWidget):
 
         self.fullscreen_detector = FullscreenDetector(self)
 
-        self.audio = AudioPlaybackToggle(
-            set_icon=self._set_play_button_icon, on_no_internet=self._on_audio_no_internet
-        )
+        self.audio = AudioPlaybackToggle(set_icon=self._set_play_button_icon, on_notice=self._on_audio_notice)
         self._refresh_in_progress = False
         self.selection_rect = None
         self.selection_window = None
@@ -74,6 +73,9 @@ class MainWindow(QtWidgets.QWidget):
         self.history_window = None   # created on first open
         self._update_thread = None   # update check (the "?" menu)
         self.text_window = None
+        self._argos_download_thread = None  # offered download of offline languages (see offer_argos_download)
+        self._argos_offer_open = False      # the question is on screen - don't ask again on top of it
+        self._argos_offer_declined = set()  # "No" for a pair - don't ask again this session
 
         self.setup_ui()
         self.setup_connections()
@@ -107,6 +109,7 @@ class MainWindow(QtWidgets.QWidget):
         self.translation_api_key = settings["translation_api_key"]
         self.audio_lang = settings["audio_lang"]
         self.audio_speed = settings["audio_speed"]
+        self.tts_engine = settings["tts_engine"]
         self.ocr_lang = settings["ocr_lang"]
         self.target_lang = settings["target_lang"] or "BG"
         self.overlay_translation_enabled = settings["overlay_translation_enabled"]
@@ -488,6 +491,7 @@ class MainWindow(QtWidgets.QWidget):
             "translation_api_key": self.translation_api_key,
             "audio_lang": self.audio_lang,
             "audio_speed": self.audio_speed,
+            "tts_engine": self.tts_engine,
             "ocr_lang": self.ocr_lang,
             "target_lang": self.target_lang,
             "overlay_translation_enabled": self.overlay_translation_enabled,
@@ -581,15 +585,13 @@ class MainWindow(QtWidgets.QWidget):
         self._current_translated_text = text or None
         self.play_btn.setEnabled(bool(self._current_translated_text))
 
-    def _on_audio_no_internet(self):
-        """edge-tts is an online service - text-to-speech cannot work without a connection."""
-        self.text_display.append(f"❌ {self.i18n.tr('audio_requires_internet')}\n")
+    def _on_audio_notice(self, key):
+        """Messages from the playback (no voice, no internet, online fallback) - in the text panel."""
+        icon = "ℹ" if key == "tts_fallback_online" else "❌"
+        self.text_display.append(f"{icon} {self.i18n.tr(key)}\n")
 
     def start_play(self):
-        if not self.audio_lang:
-            self.text_display.append(f"{self.i18n.tr('no_audio_lang')}")
-            return
-        self.audio.toggle(self._current_translated_text, self.audio_lang, self.audio_speed)
+        self.audio.toggle(self._current_translated_text, self._audio_settings())
 
     # ------------------------------------------------------------------
     # Translation (delegated to TranslationController - see core/translation_controller.py)
@@ -658,6 +660,9 @@ class MainWindow(QtWidgets.QWidget):
             self.text_display.append(source_text)
         message = f"❌ {self.i18n.tr(error_key)}"
         self.text_display.append(f"{message}: {detail}\n" if detail else f"{message}\n")
+        if error_key == "argos_model_missing":
+            # Offline translation is the default - the first translation offers the download.
+            self.offer_argos_download(detail, then=self.translate_selection)
         if error_key == "translation_timeout":
             # A separate visible pop-up only for timeouts - unlike
             # the other errors, here the user probably wants to know
@@ -667,6 +672,61 @@ class MainWindow(QtWidgets.QWidget):
                 self, self.i18n.tr("warning_title"), self.i18n.tr("translation_timeout")
             )
         self._reshow_overlay_if_pending()
+
+    def offer_argos_download(self, pair_text, then=None, parent=None):
+        """
+        The models for offline translation are not downloaded yet - asks whether to
+        download them now (once, ~70 MB per language pair) and, when done, calls
+        then() (translates again). Progress goes to the text panel.
+        """
+        if ArgosDownloadThread.is_busy() or self._argos_offer_open or pair_text in self._argos_offer_declined:
+            return
+        if not argos.libraries_available():
+            return
+        msg = QtWidgets.QMessageBox(parent or self)
+        msg.setIcon(QtWidgets.QMessageBox.Question)
+        msg.setWindowTitle(self.i18n.tr("argos_offer_title"))
+        msg.setText(self.i18n.tr("argos_offer_text").format(pair=pair_text))
+        yes_btn = msg.addButton(self.i18n.tr("argos_offer_download"), QtWidgets.QMessageBox.YesRole)
+        no_btn = msg.addButton(self.i18n.tr("no_button"), QtWidgets.QMessageBox.NoRole)
+        msg.setDefaultButton(yes_btn)
+        self._argos_offer_open = True
+        try:
+            msg.exec_()
+        finally:
+            self._argos_offer_open = False
+        if msg.clickedButton() != yes_btn:
+            self._argos_offer_declined.add(pair_text)
+            return
+
+        source = argos.source_language(self.ocr_lang)
+        target = (self.target_lang or "BG").strip().lower()[:2]
+        thread = ArgosDownloadThread(source, target)
+        reported = set()  # progress at 25% steps - not a line per chunk
+
+        def on_progress(pair, downloaded, total):
+            step = int(downloaded * 4 / total) * 25 if total > 0 else None
+            if step is not None and (pair, step) not in reported:
+                reported.add((pair, step))
+                self.text_display.append(f"{self.i18n.tr('argos_downloading')} {pair} ({step}%)")
+
+        def on_finished(success, message_key, params):
+            self._argos_download_thread = None
+            if success:
+                self.text_display.append(f"✅ {self.i18n.tr('argos_downloaded')}: {params.get('name', '')}\n")
+                self._reconfigure_translator()
+                if then:
+                    then()
+            else:
+                self.text_display.append(f"❌ {self.i18n.tr(message_key).format(**params)}\n")
+
+        thread.progress.connect(on_progress)
+        thread.finished_download.connect(on_finished)
+        self._argos_download_thread = thread
+        self.text_display.append(f"{self.i18n.tr('argos_downloading')} {pair_text}")
+        self._restore_window()
+        self._set_overlay_panel_visible(True)
+        thread.start()
 
     def _on_translation_finished(self, source_text, translated_text, from_cache, fallback_used,
                                   font_size, rect):
@@ -703,8 +763,7 @@ class MainWindow(QtWidgets.QWidget):
                 font_size=overlay_font_size,
                 font_color=self.font_color,
                 background_opacity=self.overlay_opacity,
-                audio_lang=self.audio_lang,
-                audio_speed=self.audio_speed,
+                get_audio_settings=self._audio_settings,
                 i18n=self.i18n,
             )
             self.translation_overlay.closed.connect(self._on_overlay_closed)
@@ -821,7 +880,8 @@ class MainWindow(QtWidgets.QWidget):
         self._add_to_history(source, translation)
 
     def _audio_settings(self):
-        return self.audio_lang, self.audio_speed
+        """What to read with - engine, voice, speed and the language of the translation."""
+        return AudioOptions(self.tts_engine, self.audio_lang, self.audio_speed, self.target_lang)
 
     def show_history(self):
         if self.history_window is None:
@@ -855,6 +915,8 @@ class MainWindow(QtWidgets.QWidget):
                 cache=self.translation_cache,
                 get_audio_settings=self._audio_settings,
                 on_translated=self._on_text_translated,
+                on_argos_missing=lambda pair: self.offer_argos_download(
+                    pair, then=self.text_window.translate_now, parent=self.text_window),
                 on_geometry=self._save_text_window_geometry,
                 geometry=self.settings.get("text_window_geometry"),
                 auto_translate=self.settings.get("text_auto_translate", True),

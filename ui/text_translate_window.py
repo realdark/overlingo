@@ -24,15 +24,16 @@ class TextTranslateWindow(QtWidgets.QDialog):
     get_translator:     callback() -> the current translator (may be None)
     get_target_lang:    callback() -> target language from the settings
     cache:              core.translations.TranslationCache (shared with screen translation)
-    get_audio_settings: callback() -> (voice, rate)
+    get_audio_settings: callback() -> AudioOptions (engine, voice, speed, language)
     on_translated:      callback(source, translation, from_cache) - for history and statistics
     on_geometry:        callback([x, y, w, h]) - on hide, so it gets saved
     on_auto_changed:    callback(bool) - the "Auto translate" checkbox, so it gets saved
+    on_argos_missing:   callback(pair) - offline translation models are missing (offers the download)
     """
 
     def __init__(self, parent, i18n, get_translator, get_target_lang, cache,
                  get_audio_settings, on_translated, on_geometry, geometry=None,
-                 auto_translate=True, on_auto_changed=None):
+                 auto_translate=True, on_auto_changed=None, on_argos_missing=None):
         super().__init__(parent, QtCore.Qt.WindowTitleHint | QtCore.Qt.WindowCloseButtonHint)
         self.i18n = i18n
         self._get_translator = get_translator
@@ -40,6 +41,7 @@ class TextTranslateWindow(QtWidgets.QDialog):
         self._cache = cache
         self._on_translated = on_translated
         self._on_geometry = on_geometry
+        self._on_argos_missing = on_argos_missing
 
         self._request_id = 0
         self._threads = set()  # keep references while the threads are running
@@ -178,6 +180,8 @@ class TextTranslateWindow(QtWidgets.QDialog):
             message = f"{message} {detail}"
         self.status_label.setText(message)
         self.status_label.setToolTip(detail)
+        if error_key == "argos_model_missing" and self._on_argos_missing:
+            self._on_argos_missing(detail)
 
     def _update_output_buttons(self):
         has_output = bool(self.output_edit.toPlainText())

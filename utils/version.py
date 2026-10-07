@@ -6,4 +6,4 @@ Read by the About window (ui/dialogs.py) and by build.sh / build.bat
 build scripts read it without loading PyQt5/pygame and the other libraries.
 """
 
-APP_VERSION = "3.3"
+APP_VERSION = "3.4"

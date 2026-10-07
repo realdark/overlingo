@@ -39,6 +39,7 @@ pyinstaller --onedir --windowed \
   --hidden-import=PyQt5.QtGui \
   --hidden-import=PyQt5.QtWidgets \
   --hidden-import=PyQt5.QtNetwork \
+  --hidden-import=PyQt5.QtTextToSpeech \
   --hidden-import=cv2 \
   --hidden-import=numpy \
   --exclude-module pynput \

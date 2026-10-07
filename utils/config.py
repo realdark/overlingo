@@ -172,7 +172,7 @@ DEFAULT_SETTINGS = {
     "text_size": 14, 
     "font_color": "#FFFFFF", 
     "window_pos": None, 
-    "translation_api": "google",
+    "translation_api": "argos",  # offline on this computer; languages are downloaded on first use
     "translation_api_key": "",
     "ocr_lang": "eng",
     "target_lang": "",
@@ -182,6 +182,7 @@ DEFAULT_SETTINGS = {
     "overlay_opacity": 200,
     "audio_lang": "",
     "audio_speed": 1.0,
+    "tts_engine": "system",  # "system" - the computer's voices (offline) / "edge" - Microsoft Edge (online)
     "interface_language": "en",
     "auto_refresh_interval": 5000,
     "hide_overlay_enabled": True,

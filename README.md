@@ -10,12 +10,12 @@ translation.
 ## Features
 
 - Select and translate text from any part of the screen (OCR via Tesseract)
-- Translation services: **Google Translate**, **DeepL**, **Microsoft Azure
-  Translator** and **offline translation** on the computer itself (the free
-  Argos Translate models, run with CTranslate2 - no API key and no separate
-  program needed; the models are downloaded from Settings, ~70 MB per
-  language pair, and without a direct model the translation goes through
-  English)
+- Translation services: **offline translation** on the computer itself -
+  the default (the free Argos Translate models, run with CTranslate2 - no API
+  key and no separate program needed; the first translation between two
+  languages offers to download them, ~70 MB per language pair, and without a
+  direct model the translation goes through English), **Google Translate**,
+  **DeepL** and **Microsoft Translator**
 - Automatic fallback to Google if the main paid service fails, and to
   offline translation if there is no connection and the models are
   downloaded
@@ -24,8 +24,12 @@ translation.
   APIs
 - Choose and download OCR languages right from the app (Settings →
   "Download language", fetches from `tessdata_fast`)
-- Choose the text-to-speech voice from the full list of edge-tts voices,
-  with autocomplete when Settings is opened
+- Reading translations aloud **offline with the computer's own voices** (the
+  default - Qt TextToSpeech: SAPI on Windows, the system voices on macOS,
+  speech-dispatcher on Linux) or online with the natural **Microsoft Edge**
+  voices (edge-tts; picked automatically by the translation language, or from
+  the full list). Without a system voice for the language, the online voice
+  reads instead when there is internet
 - Transparent overlay for the results, positioned over the original text,
   with the same font size (measured in a background thread - see
   `core/font_size_detector.py`)
@@ -82,13 +86,20 @@ sudo apt install tesseract-ocr-bul   # or the language you want
 or use the "Download language" button in Settings (it writes directly to
 the system tessdata folder, which is detected automatically).
 
-### 3. Offline translation (optional)
+### 3. Offline translation and voices
 
-The `ctranslate2` and `sentencepiece` libraries come with `requirements.txt`.
-The models themselves (one per language pair) are downloaded from
-Settings → "Translation" tab → "Download offline languages" into an
-`argos-models` folder next to the program. Not needed if you only use
-Google/DeepL/Microsoft. When moving to a new version, copy the
+Offline translation is the default. The `ctranslate2` and `sentencepiece`
+libraries come with `requirements.txt`. The models themselves (one per
+language pair) are offered for download on the first translation between two
+languages, or can be downloaded beforehand from Settings → "Translation" tab →
+"Download offline languages"; they go into an `argos-models` folder next to
+the program.
+
+Reading aloud uses the voices installed in the operating system by default
+(no extra package - Qt TextToSpeech is part of PyQt5). On Linux it needs
+speech-dispatcher (e.g. `sudo apt install speech-dispatcher espeak-ng`).
+Missing languages can be added in the system speech settings; otherwise the
+online Microsoft Edge voice is used when there is internet. When moving to a new version, copy the
 `argos-models` folder into the new one so you don't have to download the
 models again.
 
@@ -124,8 +135,9 @@ core/                       Logic without UI (testable)
   tesseract_setup.py        Finding the system Tesseract
   retry.py                  Retry with exponential backoff
   network.py                Internet connection check
-  audio_handler.py          Text-to-speech (edge-tts) in a background thread
-  audio_playback.py         Shared play/stop logic
+  audio_handler.py          Online text-to-speech (edge-tts) in a background thread
+  system_tts.py             Offline text-to-speech with the computer's voices (Qt TextToSpeech)
+  audio_playback.py         Play/stop for all play buttons, engine choice and online fallback
   localization.py           Loading the texts from assets/locales
   argos.py                  Offline translation (the Argos Translate models)
   argos_download.py         Downloading the offline translation models

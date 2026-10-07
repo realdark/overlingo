@@ -95,12 +95,20 @@ First steps in the app
    (Google/DeepL/Microsoft/offline), target language, voice, hotkeys,
    etc.
 
-No API key is needed by default - the built-in Google translation
-works right away. DeepL/Microsoft require your own key (paid services
-with a free tier). "On this computer (offline)" translates without
-internet: in Settings -> "Translation" press "Download offline
-languages" once (about 70 MB per language pair). Downloaded languages
-are also used automatically when the internet is down. They are kept
+By default Overlingo translates and reads aloud offline, on this
+computer - no API key and no account. The first time you translate
+between two languages it offers to download them (about 70 MB per
+language pair, once); you can also download them beforehand in
+Settings -> "Translation" -> "Download offline languages". Google
+Translate (free) and DeepL/Microsoft (your own key) are online
+alternatives; when the internet is down, the downloaded languages are
+used automatically.
+
+Reading aloud uses the voices installed in your operating system. If
+there is none for a language, the online Microsoft Edge voice reads
+instead (internet needed) - or add a voice in the system speech
+settings (Windows: Settings -> Time & language -> Speech). On Linux,
+install speech-dispatcher: sudo apt install speech-dispatcher espeak-ng They are kept
 in the "argos-models" folder next to the program - copy it over when
 you move to a new version so you don't download them again.
 
