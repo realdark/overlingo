@@ -2,13 +2,16 @@
 Заместители за библиотеки, които липсват в текущата среда.
 
 Подменят се САМО ако истинската библиотека не може да се импортира -
-ако е инсталирана, тестовете ползват нея. Заместителят приема всякакви
+ако е инсталирана, тестовете ползват нея. С OVERLINGO_TEST_STUBS=1 се
+подменят винаги (GitHub Actions): тестовете проверяват логиката, а
+истинските Qt/pynput/звук/мрежа на машина без екран могат да увиснат. Заместителят приема всякакви
 атрибути и извиквания и не прави нищо - достатъчно, за да се импортират
 модулите на проекта (напр. `class TranslationThread(QThread)`), без да
 се изпълнява реален интерфейс, звук или мрежа.
 """
 
 import importlib
+import os
 import sys
 import types
 
@@ -47,8 +50,11 @@ _OPTIONAL = {
 
 
 def install():
+    force = os.environ.get("OVERLINGO_TEST_STUBS") == "1"
     for package, submodules in _OPTIONAL.items():
         try:
+            if force:
+                raise ImportError("OVERLINGO_TEST_STUBS=1")
             importlib.import_module(package)
             for sub in submodules:
                 importlib.import_module(sub)

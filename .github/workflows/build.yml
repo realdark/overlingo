@@ -29,9 +29,10 @@ jobs:
   tests:
     name: Unit tests
     runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -42,6 +43,9 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
+          # Qt, pynput, звук и мрежа - със заместители (виж tests/_stubs.py);
+          # истинският билд се проверява отделно с --self-test.
+          OVERLINGO_TEST_STUBS: "1"
         run: python -m unittest discover -s tests -t . -v
 
   version:
@@ -49,7 +53,7 @@ jobs:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Tag must be v + APP_VERSION
         run: |
           VERSION="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' utils/version.py)"
@@ -80,8 +84,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -142,7 +146,7 @@ jobs:
         run: dist/Overlingo.app/Contents/MacOS/Overlingo --self-test --require-argos --argos-models "$RUNNER_TEMP/argos-models" --log "$RUNNER_TEMP/selftest.log"
 
       - name: Upload archive
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: Overlingo-${{ matrix.os }}
           path: |
@@ -169,7 +173,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
           merge-multiple: true
