@@ -69,6 +69,9 @@ def main():
         except OSError as e:
             logger.warning(f"Не успях да сменя работната папка към {BASE_DIR}: {e}")
         app = QtWidgets.QApplication(sys.argv)
+        # Linux: връзва прозореца със стартера overlingo.desktop (от install.sh) -
+        # така лентата/докът показват иконата на програмата (особено под Wayland).
+        app.setDesktopFileName("overlingo")
 
         # Ако Overlingo вече е отворена, само я показваме и излизаме -
         # преди splash-а, за да не мигне излишно (виж core/single_instance.py).
