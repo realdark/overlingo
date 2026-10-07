@@ -75,12 +75,16 @@ jobs:
         include:
           - name: Windows
             os: windows-2022
+            artifact: Overlingo-windows-x64
           - name: Linux
+            artifact: Overlingo-linux-x86_64
             os: ubuntu-22.04        # по-стар glibc - билдът тръгва и на по-стари дистрибуции
           - name: macOS Apple Silicon
             os: macos-14
+            artifact: Overlingo-macos-apple-silicon
           - name: macOS Intel
             os: macos-15-intel
+            artifact: Overlingo-macos-intel
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -148,7 +152,7 @@ jobs:
       - name: Upload archive
         uses: actions/upload-artifact@v6
         with:
-          name: Overlingo-${{ matrix.os }}
+          name: ${{ matrix.artifact }}
           path: |
             dist/Overlingo-*.zip
             dist/Overlingo-*.tar.gz
