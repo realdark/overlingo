@@ -1,5 +1,5 @@
 """
-UI КОМПОНЕНТИ
+UI COMPONENTS
 """
 
 from utils.imports import QtWidgets, QtCore, QtGui
@@ -8,12 +8,12 @@ from core.audio_playback import AudioPlaybackToggle
 from core.fullscreen_detector import FullscreenDetector
 
 def _warn_audio_needs_internet(parent, i18n):
-    """edge-tts е онлайн услуга - без връзка озвучаването не може да проработи."""
+    """edge-tts is an online service - text-to-speech cannot work without a connection."""
     QtWidgets.QMessageBox.warning(parent, i18n.tr("warning_title"), i18n.tr("audio_requires_internet"))
 
 
 class OverlayPanel(QtWidgets.QWidget):
-    """Панел с полупрозрачен фон и заоблени ъгли за основния прозорец."""
+    """Panel with a semi-transparent background and rounded corners for the main window."""
 
     RADIUS = 8
 
@@ -23,12 +23,12 @@ class OverlayPanel(QtWidgets.QWidget):
         self.set_alpha(alpha)
 
     def set_alpha(self, a: int):
-        """Задава ниво на прозрачност (0-255)."""
+        """Sets the opacity level (0-255)."""
         self._color.setAlpha(max(0, min(255, int(a))))
         self.update()
 
     def paintEvent(self, e):
-        """Рисува полупрозрачен фон със заоблени ъгли."""
+        """Paints a semi-transparent background with rounded corners."""
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing)
         p.setPen(QtCore.Qt.NoPen)
@@ -36,7 +36,7 @@ class OverlayPanel(QtWidgets.QWidget):
         p.drawRoundedRect(self.rect(), self.RADIUS, self.RADIUS)
 
 class SelectionWindow(QtWidgets.QWidget):
-    # Escape или десен бутон затварят прозореца без сигнал - нищо не се превежда.
+    # Escape or right click closes the window without a signal - nothing is translated.
     selection_made = QtCore.pyqtSignal(QtCore.QRect)
 
     def __init__(self, screenshot, hint_text=""):
@@ -53,8 +53,8 @@ class SelectionWindow(QtWidgets.QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        # Без фокус Escape не стига до прозореца - особено когато маркирането
-        # е пуснато с hotkey, докато друго приложение е активно.
+        # Without focus Escape never reaches the window - especially when selection
+        # is started via hotkey while another application is active.
         self.raise_()
         self.activateWindow()
         self.setFocus()
@@ -80,7 +80,7 @@ class SelectionWindow(QtWidgets.QWidget):
             self._draw_hint(qp)
 
     def _draw_hint(self, qp):
-        """Кратка подсказка горе в средата ("... · Esc за отказ"), докато още не се маркира."""
+        """Short hint at the top center ("... · Esc to cancel") until selection starts."""
         font = qp.font()
         font.setPointSize(11)
         font.setBold(True)
@@ -120,14 +120,14 @@ class SelectionWindow(QtWidgets.QWidget):
 
 class WindowDragFilter(QtCore.QObject):
     """
-    Event filter (не subclass на QWidget - нарочно, за да не рискуваме да
-    променим как се рисува/стилизира целевия widget) - закачен за празната
-    лента с бутони, позволява задръж-и-мести на цялата програма. Заменя
-    отделния "move" бутон: вече не трябва да се цели в конкретна икона,
-    просто хващаш някъде по празното пространство на лентата. Бутоните,
-    които лежат отгоре (по-висок z-order), се обработват първи от Qt и
-    консумират собствените си кликове - filter-ът вижда само събития по
-    местата, върху които няма друг widget.
+    Event filter (not a QWidget subclass - deliberately, so we don't risk
+    changing how the target widget is painted/styled) - attached to the empty
+    button toolbar, it lets you press-and-drag the whole app. Replaces the
+    separate "move" button: you no longer have to aim at a specific icon,
+    just grab anywhere on the empty space of the toolbar. Buttons
+    lying on top (higher z-order) are handled first by Qt and
+    consume their own clicks - the filter only sees events in
+    places not covered by another widget.
     """
 
     def __init__(self, parent):
@@ -142,7 +142,7 @@ class WindowDragFilter(QtCore.QObject):
                 watched.window().move(event.globalPos() - self._drag_offset)
         elif event.type() == QtCore.QEvent.MouseButtonRelease:
             self._drag_offset = None
-        return False  # никога не поглъщаме събитието - оставяме Qt да си продължи нормално
+        return False  # never swallow the event - let Qt carry on as normal
 
 class SecondaryOverlay(QtWidgets.QFrame):
     closed = QtCore.pyqtSignal()
@@ -153,34 +153,34 @@ class SecondaryOverlay(QtWidgets.QFrame):
         self.audio_lang = audio_lang
         self.audio_speed = audio_speed
         self.i18n = i18n
-        self._current_translated_text = text  # за "Копирай" и "Чети на глас"; сменя се в setText()
+        self._current_translated_text = text  # for "Copy" and "Read aloud"; updated in setText()
         self._audio = AudioPlaybackToggle(
             set_icon=self._set_play_button_icon, on_no_internet=self._on_audio_no_internet
         )
         self.original_rect = rect
 
-        # Запази параметрите за setup_ui
+        # Store the parameters for setup_ui
         self._font_size = font_size
         self._font_color = font_color
         self._background_opacity = background_opacity
         self._text = text
 
-        # Инициализация на детектора
+        # Initialize the detector
         self.fullscreen_detector = FullscreenDetector(self)
 
-        self.setup_ui()  # ⬅️ ИЗВАДЕН В ОТДЕЛЕН МЕТОД
+        self.setup_ui()  # ⬅️ MOVED INTO A SEPARATE METHOD
         self.setup_buttons()
         self.setup_connections()
 
     def setup_ui(self):
-        """Настройка на UI - отделен метод като в MainWindow"""
+        """UI setup - a separate method, like in MainWindow"""
         base_flags = QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint
         self.fullscreen_detector.apply_window_flags(self, base_flags)
 
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
 
-        # Запазваме оригиналния rect
+        # Keep the original rect
         self.setGeometry(self.original_rect)
 
         self.setFrameStyle(QtWidgets.QFrame.Box)
@@ -192,25 +192,25 @@ class SecondaryOverlay(QtWidgets.QFrame):
             }}
         """)
 
-        # ✅ Създаваме отделен контейнер за текста
+        # ✅ Create a separate container for the text
         self.text_container = QtWidgets.QWidget(self)
         self.text_container.setGeometry(0, 0, self.original_rect.width(), self.original_rect.height())
 
         text_layout = QtWidgets.QVBoxLayout(self.text_container)
         text_layout.setContentsMargins(10, 10, 10, 10)
 
-        self.text_label = QtWidgets.QLabel(self._text)  # Празен текст, ще се сетне после
+        self.text_label = QtWidgets.QLabel(self._text)  # Empty text, set later
         self.text_label.setWordWrap(True)
-        # По подразбиране QLabel НЕ позволява маркиране/копиране на текста -
-        # без това, преводът в overlay-я се вижда, но не може да се копира
-        # (за разлика от text_display в главния прозорец, който е QTextEdit
-        # и поддържа copy по подразбиране).
+        # By default QLabel does NOT allow selecting/copying the text -
+        # without this, the translation in the overlay is visible but cannot be copied
+        # (unlike text_display in the main window, which is a QTextEdit
+        # and supports copy by default).
         self.text_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
         self.text_label.setStyleSheet(f"color: {self._font_color}; font-size:{self._font_size}px; padding:5px 10px 5px 10px;")
         text_layout.addWidget(self.text_label)
 
     def _make_action_button(self, icon_file, base_rgb, hover_rgb):
-        """Помощен метод: play_btn и close_btn се различават само по икона и цвят."""
+        """Helper: play_btn and close_btn differ only by icon and color."""
         btn = QtWidgets.QToolButton(self)
         btn.setFixedSize(35, 35)
         btn.setIcon(QtGui.QIcon(image_path(icon_file)))
@@ -241,39 +241,39 @@ class SecondaryOverlay(QtWidgets.QFrame):
             "close_button.png", (255, 0, 0, 230), (255, 50, 50, 255)
         )
 
-        # ✅ Автоматично оразмеряване
+        # ✅ Automatic sizing
         self.adjust_size()
         self.show()
 
     def setup_connections(self):
-        """Настройка на връзките - отделен метод"""
+        """Connection setup - a separate method"""
         self.close_btn.clicked.connect(self.close)
         self.play_btn.clicked.connect(self.toggle_audio)
         self.copy_btn.clicked.connect(self.copy_text)
 
     def adjust_size(self):
-        """Автоматично оразмерява прозореца според съдържанието"""
-        # Необходимата височина за текста при дадената ширина
-        text_width = self.original_rect.width() - 20  # Вадим padding
-        text_height = self.text_label.heightForWidth(text_width) - 20  # Добавяме малко padding
+        """Automatically sizes the window to fit the content"""
+        # Height needed for the text at the given width
+        text_width = self.original_rect.width() - 20  # Subtract padding
+        text_height = self.text_label.heightForWidth(text_width) - 20  # Add a little padding
 
 
-        # ✅ ПОПРАВЕНО: Минимална и максимална височина
-        min_height = 100  # Минимална височина
+        # ✅ FIXED: Minimum and maximum height
+        min_height = 100  # Minimum height
         buttons_height = 50
         margins = 30
 
         required_height = text_height + buttons_height + margins
-        required_height = max(min_height, required_height)  # Не по-малко от min_height
+        required_height = max(min_height, required_height)  # No less than min_height
 
-        # Максимална височина (60% от екрана, вместо 80%)
+        # Maximum height (60% of the screen, instead of 80%)
         screen_height = QtWidgets.QApplication.primaryScreen().geometry().height()
         max_height = int(screen_height * 0.6)
 
-        # Финална височина
+        # Final height
         final_height = min(required_height, max_height)
 
-        # ✅ Оразмеряваме целия прозорец
+        # ✅ Resize the whole window
         self.setGeometry(
             self.original_rect.x(),
             self.original_rect.y(),
@@ -281,20 +281,20 @@ class SecondaryOverlay(QtWidgets.QFrame):
             final_height
         )
 
-        # ✅ Оразмеряваме текстовия контейнер
-        # Добавяме 10 за да доближм контейнера до overlay
+        # ✅ Resize the text container
+        # Add 10 to bring the container closer to the overlay
         self.text_container.setGeometry(0, 0, self.width(), final_height - buttons_height + 10)
 
-        # ✅ Позиционираме бутоните ОТДОЛУ
+        # ✅ Position the buttons at the BOTTOM
         self.copy_btn.move(self.width() - 135, final_height - 45)
         self.play_btn.move(self.width() - 90, final_height - 45)
         self.close_btn.move(self.width() - 45, final_height - 45)
 
     def setText(self, text):
-        """Променя текста и автоматично оразмерява прозореца"""
+        """Changes the text and automatically resizes the window"""
         self.text_label.setText(text)
-        # Иначе "Копирай" и "Чети на глас" в overlay-я остават с първия
-        # превод след авто-рефреш или "Преведи отново".
+        # Otherwise "Copy" and "Read aloud" in the overlay keep the first
+        # translation after an auto-refresh or "Translate again".
         self._current_translated_text = text
         self.adjust_size()
 
@@ -305,7 +305,7 @@ class SecondaryOverlay(QtWidgets.QFrame):
         self._audio.toggle(self._current_translated_text, self.audio_lang, self.audio_speed)
 
     def copy_text(self):
-        """Копира текущия превод в клипборда - по-удобно от ръчно маркиране върху плаващия overlay."""
+        """Copies the current translation to the clipboard - easier than selecting it by hand on the floating overlay."""
         QtWidgets.QApplication.clipboard().setText(self._current_translated_text)
 
     def _on_audio_no_internet(self):
@@ -320,9 +320,9 @@ class SecondaryOverlay(QtWidgets.QFrame):
 
 class AudioButton(QtWidgets.QPushButton):
     """
-    Бутон play/stop (само икона) за прозорците с история и превод на текст.
-    get_text() връща текста за четене, get_audio_settings() - (глас, скорост)
-    от текущите настройки (могат да се сменят, докато прозорецът е отворен).
+    Play/stop button (icon only) for the history and text translation windows.
+    get_text() returns the text to read, get_audio_settings() - (voice, rate)
+    from the current settings (they may change while the window is open).
     """
 
     def __init__(self, i18n, get_text, get_audio_settings, parent=None):
@@ -337,7 +337,7 @@ class AudioButton(QtWidgets.QPushButton):
     def _set_icon(self, icon_filename):
         playing = icon_filename.startswith("stop")
         self.setIcon(QtGui.QIcon(image_path(icon_filename.replace(".png", "_white.png"))))
-        # Само икона, както play бутоните в лентата и в overlay-я; текстът е в подсказката.
+        # Icon only, like the play buttons in the toolbar and the overlay; the text is in the tooltip.
         self.setToolTip(self.i18n.tr("stop_audio" if playing else "read_aloud"))
 
     def _toggle(self):
@@ -351,7 +351,7 @@ class AudioButton(QtWidgets.QPushButton):
         self._audio.stop()
 
     def update_text(self):
-        """Обновява надписа според езика на интерфейса и дали в момента се чете."""
+        """Updates the button for the UI language and whether audio is currently playing."""
         self._set_icon("stop_button.png" if self._audio.is_playing() else "play_button.png")
 
     def _on_no_internet(self):
@@ -360,8 +360,8 @@ class AudioButton(QtWidgets.QPushButton):
 
 class CopyButton(QtWidgets.QPushButton):
     """
-    Бутон "копирай" (само икона, като в overlay-я). Копира get_text() в
-    клипборда и за момент показва "Копирано ✓" като подсказка до бутона.
+    "Copy" button (icon only, like in the overlay). Copies get_text() to
+    the clipboard and briefly shows "Copied ✓" as a tooltip next to the button.
     """
 
     def __init__(self, i18n, get_text, parent=None):
@@ -373,7 +373,7 @@ class CopyButton(QtWidgets.QPushButton):
         self.clicked.connect(self._copy)
 
     def update_text(self):
-        """Подсказката според езика на интерфейса."""
+        """The tooltip, per the UI language."""
         self.setToolTip(self.i18n.tr("copy_button"))
 
     def _copy(self):
@@ -381,7 +381,7 @@ class CopyButton(QtWidgets.QPushButton):
         if not text:
             return
         QtWidgets.QApplication.clipboard().setText(text)
-        # Без надпис на бутона потвърждението излиза като подсказка до него.
+        # With no label on the button, the confirmation appears as a tooltip next to it.
         QtWidgets.QToolTip.showText(
             self.mapToGlobal(QtCore.QPoint(0, self.height())), self.i18n.tr("copied_feedback"), self
         )

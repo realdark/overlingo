@@ -1,29 +1,29 @@
 #!/bin/bash
 echo "=== Build Overlingo (onedir, Linux) ==="
 
-# Спиране при грешка
+# Stop on error
 set -e
 
-# Работи от папката на скрипта, независимо откъде е пуснат.
+# Run from the script's directory, regardless of where it was launched from.
 cd "$(dirname "$(readlink -f "$0")")"
 
-# Версията се чете от utils/version.py - единственото място, където се сменя.
+# The version is read from utils/version.py - the only place it is changed.
 VERSION="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' utils/version.py)"
 if [ -z "$VERSION" ]; then
-    echo "Не мога да прочета APP_VERSION от utils/version.py"
+    echo "Cannot read APP_VERSION from utils/version.py"
     exit 1
 fi
 ARCH="$(uname -m)"
 
-# Изчистване на стари билдове
+# Clean up old builds
 rm -rf build
 rm -rf dist
 rm -f overlingo.spec
 
-# Иконата трябва да е .png или .ico
+# The icon must be .png or .ico
 ICON="assets/icons/app_icon.png"
 
-# Стартираме PyInstaller
+# Run PyInstaller
 pyinstaller --onedir --noconsole \
   --icon="$ICON" \
   --name "overlingo" \
@@ -48,46 +48,46 @@ pyinstaller --onedir --noconsole \
   --exclude-module tensorflow \
   --collect-all sentencepiece \
   main.py
-  # ctranslate2/sentencepiece - превод без интернет (core/argos.py). Внасят
-  # се чак при нужда (вътре във функция), а носят и собствени native
-  # библиотеки - --collect-all взима всичко, за да не липсва .so в билда.
-  # --exclude-module: ctranslate2 по желание ползва torch - не го прибираме.
-  # pynput се внася от core/hotkey_manager.py - PyInstaller го засича
-  # статично. Hotkey функцията е активна на Linux само под X11 сесия
-  # (HOTKEY_SUPPORTED проверка - виж core/hotkey_manager.py), не под
-  # Wayland. "_xorg" е Linux backend-ът на pynput (виж pynput docs) -
-  # НЕ "_win32", това е за build.bat.
+  # ctranslate2/sentencepiece - offline translation (core/argos.py). They are
+  # imported lazily (inside a function) and ship their own native
+  # libraries - --collect-all grabs everything so no .so is missing from the build.
+  # --exclude-module: ctranslate2 optionally uses torch - we don't bundle it.
+  # pynput is imported by core/hotkey_manager.py - PyInstaller detects it
+  # statically. The hotkey feature works on Linux only in an X11 session
+  # (HOTKEY_SUPPORTED check - see core/hotkey_manager.py), not under
+  # Wayland. "_xorg" is pynput's Linux backend (see pynput docs) -
+  # NOT "_win32", that one is for build.bat.
 
-# Копиране на assets
+# Copy assets
 echo "Copying assets..."
 cp -r assets dist/overlingo/
 
-# README за крайния потребител (различен от техническия README.md в
-# repo-то) - обяснява Tesseract изискването и първите стъпки, без да
-# е нужно да чете кода. Английски е основният README.txt, българският
-# е README_bg.txt (интерфейсът е по подразбиране на български, но
-# английският е по-универсален за README на дистрибуирания архив).
+# End-user README (separate from the technical README.md in the repo) -
+# explains the Tesseract requirement and first steps without having to
+# read the code. English is the main README.txt, Bulgarian is
+# README_bg.txt (English is the more universal choice for the README of
+# the distributed archive).
 cp README_DIST_en.txt dist/overlingo/README.txt
 cp README_DIST_bg.txt dist/overlingo/README_bg.txt
 
-# install.sh - еднократен desktop-интеграционен скрипт, за да може
-# Overlingo да се отваря с двоен клик / от менюто с приложения, вместо
-# само от терминал (виж коментарите в самия install.sh).
+# install.sh - one-time desktop integration script so Overlingo can be
+# opened with a double click / from the application menu instead of only
+# from a terminal (see the comments in install.sh itself).
 cp install.sh dist/overlingo/install.sh
 chmod +x dist/overlingo/install.sh
 
-# Tesseract НЕ се пакетира - Overlingo разчита изцяло на системна
-# инсталация (виж README.md "Инсталация"), потребителят го слага сам
-# (apt/dnf/pacman). Виж и коментара при TESSERACT_PATHS в
-# utils/config.py защо съзнателно отказахме от AppImage bundling.
+# Tesseract is NOT bundled - Overlingo relies entirely on a system
+# installation (see README.md "Installation"); the user installs it
+# (apt/dnf/pacman). See also the comment at TESSERACT_PATHS in
+# utils/config.py for why we deliberately dropped AppImage bundling.
 
-# НЕ копираме settings.json нарочно - съдържа лични настройки/API
-# ключове; приложението си генерира чист файл при първо стартиране
-# (виж core/settings_manager.py - fallback към DEFAULT_SETTINGS).
+# settings.json is deliberately NOT copied - it contains personal settings/API
+# keys; the app generates a clean file on first launch
+# (see core/settings_manager.py - fallback to DEFAULT_SETTINGS).
 
-# Архивиране - от вътре в dist/, за да съдържа архивът папка
-# "overlingo/", а не пълния път dist/overlingo/... (по-чисто при
-# разархивиране от потребителя).
+# Archive from inside dist/ so the archive contains an "overlingo/"
+# folder rather than the full dist/overlingo/... path (cleaner when the
+# user extracts it).
 echo "Archiving..."
 ARCHIVE_NAME="Overlingo-${VERSION}-linux-${ARCH}.tar.gz"
 (cd dist && tar -czf "$ARCHIVE_NAME" overlingo)

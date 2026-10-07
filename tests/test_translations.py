@@ -27,14 +27,14 @@ class TranslationCacheTest(unittest.TestCase):
     def test_target_language_is_part_of_the_key(self):
         cache = TranslationCache()
         cache.put("Hello", "Здравей", "BG")
-        self.assertIsNone(cache.get("Hello", "DE"))  # иначе след смяна на езика излиза старият превод
+        self.assertIsNone(cache.get("Hello", "DE"))  # otherwise the old translation shows after a language change
 
     def test_oldest_unused_entry_is_dropped(self):
         cache = TranslationCache(max_items=2)
         cache.put("a", "1", "BG")
         cache.put("b", "2", "BG")
-        cache.get("a", "BG")          # "a" е ползван наскоро
-        cache.put("c", "3", "BG")     # препълване - отпада "b"
+        cache.get("a", "BG")          # "a" was used recently
+        cache.put("c", "3", "BG")     # overflow - "b" is evicted
         self.assertEqual(cache.get("a", "BG"), "1")
         self.assertIsNone(cache.get("b", "BG"))
         self.assertEqual(len(cache.cache), 2)
@@ -89,7 +89,7 @@ class FallbackTranslatorTest(unittest.TestCase):
         translator = FallbackTranslator(_Fixed(error=translations.NoInternetError("x")), google, offline)
         self.assertEqual(translator.translate("x", "BG"), "без интернет")
         self.assertEqual(translator.fallback_used, "offline")
-        self.assertEqual(google.calls, 0)  # без интернет Google също не би сработил
+        self.assertEqual(google.calls, 0)  # without internet Google wouldn't work either
 
     def test_no_internet_without_offline_models_reports_no_internet(self):
         offline = _Fixed(error=translations.ArgosModelMissingError("en → bg"))
@@ -110,7 +110,7 @@ class FallbackTranslatorTest(unittest.TestCase):
         worker = threading.Thread(target=lambda: seen.append(translator.fallback_used))
         worker.start()
         worker.join()
-        self.assertEqual(seen, [""])  # другата нишка не вижда резултата на тази
+        self.assertEqual(seen, [""])  # the other thread doesn't see this one's result
         self.assertEqual(translator.fallback_used, "google")
 
 
@@ -134,7 +134,7 @@ class CreateTranslatorTest(unittest.TestCase):
             translator = create_translator("google", source_lang="de")
             self.assertIsInstance(translator.offline, translations.ArgosTranslator)
             self.assertEqual(translator.offline.source_lang, "de")
-            self.assertIsNone(translator.fallback)  # Google не пада към себе си
+            self.assertIsNone(translator.fallback)  # Google doesn't fall back to itself
         with mock.patch.object(translations, "libraries_available", return_value=False):
             self.assertIsNone(create_translator("deepl", "key").offline)
 
@@ -159,7 +159,7 @@ class GoogleSplitTextTest(unittest.TestCase):
         chunks = GoogleTranslator()._split_text(text, max_len=120)
         self.assertGreater(len(chunks), 1)
         self.assertTrue(all(len(c.rstrip()) <= 120 for c in chunks))
-        # Нищо не се губи на границите между парчетата.
+        # Nothing is lost at the chunk boundaries.
         self.assertEqual("".join(chunks), text)
 
     def test_newlines_are_kept(self):
@@ -252,7 +252,7 @@ class ErrorKeyTest(unittest.TestCase):
 
 
 class FontSizeInThreadTest(unittest.TestCase):
-    """Размерът на шрифта се мери във фоновата нишка и само при поискване."""
+    """Font size is measured in the background thread and only on request."""
 
     def _thread(self, detect):
         return TranslationThread(gray_img=object(), ocr_lang="eng", translator=None,

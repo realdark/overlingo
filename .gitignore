@@ -1,4 +1,4 @@
-# Лични настройки / логове - не за в git (може да съдържат API ключове)
+# Personal settings / logs - not for git (may contain API keys)
 settings.json
 settings.json.tmp
 app.log
@@ -12,17 +12,17 @@ __pycache__/
 venv/
 .venv/
 
-# PyInstaller build артефакти
+# PyInstaller build artifacts
 build/
 dist/
 *.spec
 
-# Bundled Tesseract (binary - виж README "Build" секцията защо не е в git)
+# Bundled Tesseract (binary - see the README "Build" section for why it's not in git)
 tesseract/
 
-# OS junk файлове
+# OS junk files
 .DS_Store
 Thumbs.db
 
-# Свалени модели за превод без интернет (~70 MB на двойка езици)
+# Downloaded offline translation models (~70 MB per language pair)
 argos-models/

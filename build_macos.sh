@@ -1,7 +1,7 @@
 #!/bin/bash
-# Билд за macOS: Overlingo.app (onedir в .app пакет) + zip архив.
-# Пуска се на Mac (или в GitHub Actions - виж .github/workflows/build.yml).
-# Архитектурата е тази на машината: arm64 (Apple Silicon) или x86_64 (Intel).
+# macOS build: Overlingo.app (onedir inside an .app bundle) + zip archive.
+# Run on a Mac (or in GitHub Actions - see .github/workflows/build.yml).
+# The architecture is that of the machine: arm64 (Apple Silicon) or x86_64 (Intel).
 echo "=== Build Overlingo (macOS .app) ==="
 
 set -e
@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 VERSION="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' utils/version.py)"
 if [ -z "$VERSION" ]; then
-    echo "Не мога да прочета APP_VERSION от utils/version.py"
+    echo "Cannot read APP_VERSION from utils/version.py"
     exit 1
 fi
 ARCH="$(uname -m)"
@@ -17,13 +17,13 @@ ARCH="$(uname -m)"
 rm -rf build dist
 rm -f Overlingo.spec
 
-# assets влиза ВЪТРЕ в .app пакета (--add-data) - utils/config.py го намира
-# през sys._MEIPASS. Настройките, логовете и моделите за превод без интернет
-# са в ~/Library/Application Support/Overlingo (пакетът не се променя).
+# assets goes INSIDE the .app bundle (--add-data) - utils/config.py finds it
+# via sys._MEIPASS. Settings, logs and offline translation models live in
+# ~/Library/Application Support/Overlingo (the bundle is never modified).
 #
-# pynput (глобални hotkey-и) е изключен: на macOS hotkey-ите засега не се
-# поддържат (иска Accessibility разрешение - виж core/hotkey_manager.py),
-# а pynput там дърпа и голямата pyobjc.
+# pynput (global hotkeys) is excluded: hotkeys are not supported on macOS yet
+# (they need Accessibility permission - see core/hotkey_manager.py),
+# and on macOS pynput also pulls in the large pyobjc.
 pyinstaller --onedir --windowed \
   --name "Overlingo" \
   --icon="assets/icons/app_icon.icns" \
@@ -52,26 +52,26 @@ pyinstaller --onedir --windowed \
 APP="dist/Overlingo.app"
 PLIST="$APP/Contents/Info.plist"
 
-# Версията в "За програмата" на Finder (Cmd+I) и текстът при въпроса за
-# разрешение. PyInstaller не ги задава от командния ред.
+# The version shown in Finder's "Get Info" (Cmd+I) and other plist keys.
+# PyInstaller doesn't set them from the command line.
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$PLIST"
 plutil -replace CFBundleVersion -string "$VERSION" "$PLIST"
 plutil -replace LSMinimumSystemVersion -string "11.0" "$PLIST"
 plutil -replace NSHighResolutionCapable -bool true "$PLIST"
 
-# Промяната на Info.plist разваля подписа, който PyInstaller слага -
-# подписваме отново "ad-hoc" (без Apple Developer акаунт). Без подпис
-# Apple Silicon изобщо не пуска програмата.
+# Editing Info.plist breaks the signature PyInstaller applies - re-sign
+# "ad-hoc" (no Apple Developer account). Without a signature Apple
+# Silicon refuses to run the app at all.
 codesign --force --deep --sign - "$APP"
 
-# Архив: Overlingo.app + README-тата, в папка с името на версията.
+# Archive: Overlingo.app + the READMEs, in a folder named after the version.
 echo "Archiving..."
 PACKAGE="Overlingo-${VERSION}-macos-${ARCH}"
 mkdir -p "dist/$PACKAGE"
 cp -R "$APP" "dist/$PACKAGE/"
 cp README_DIST_en.txt "dist/$PACKAGE/README.txt"
 cp README_DIST_bg.txt "dist/$PACKAGE/README_bg.txt"
-# ditto пази symlink-овете и атрибутите на .app пакета (zip от Finder също).
+# ditto preserves the .app bundle's symlinks and attributes (as does a Finder zip).
 (cd dist && ditto -c -k --keepParent "$PACKAGE" "$PACKAGE.zip")
 
 echo

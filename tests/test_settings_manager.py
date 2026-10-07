@@ -52,7 +52,7 @@ class SettingsManagerTest(unittest.TestCase):
             self.assertEqual(ctx.exception.detail, "en → bg")
         with mock.patch.object(settings_manager.argos, "libraries_available", return_value=True), \
              mock.patch.object(settings_manager.argos, "installed_pairs", return_value={("en", "bg")}):
-            self.manager.validate(settings)  # без грешка
+            self.manager.validate(settings)  # no error
 
     def test_corrupted_file_falls_back_to_defaults(self):
         self.path.write_text("{ not json", encoding="utf-8")
@@ -66,7 +66,7 @@ class SettingsManagerTest(unittest.TestCase):
 
     def test_failed_save_keeps_previous_file(self):
         self.manager.save(dict(DEFAULT_SETTINGS, text_size=33))
-        self.manager.save(dict(DEFAULT_SETTINGS, text_size=44, broken=object()))  # не може да се запише
+        self.manager.save(dict(DEFAULT_SETTINGS, text_size=44, broken=object()))  # cannot be serialized
         self.assertEqual(self.manager.load()["text_size"], 33)
         self.assertEqual([p.name for p in self.path.parent.iterdir()], ["settings.json"])
 
@@ -126,7 +126,7 @@ class ValidateTest(unittest.TestCase):
             with self.assertRaises(SettingsValidationError) as ctx:
                 self.manager.validate(self._settings(translation_api="deepl", translation_api_key="bad"))
         self.assertEqual(ctx.exception.message_key, "invalid_deepl_key")
-        # Проверката не бива да минава тихо през резервния Google.
+        # The check must not silently fall through to the Google fallback.
         self.assertFalse(create.call_args.kwargs["enable_fallback"])
 
 

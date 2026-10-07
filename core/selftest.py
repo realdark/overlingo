@@ -1,19 +1,19 @@
 """
-АВТОМАТИЧНА ПРОВЕРКА НА ГОТОВИЯ БИЛД:  overlingo --self-test
+AUTOMATIC CHECK OF THE FINISHED BUILD:  overlingo --self-test
 
-Пуска се от GitHub Actions след билда (виж .github/workflows/build.yml),
-без екран (Qt "offscreen"). Проверява това, което при билд най-често се
-чупи незабелязано: липсващи библиотеки в пакета, Qt, Tesseract,
-разпознаване на текст, превод без интернет и построяването на главния
-прозорец. Може да се пусне и ръчно - не променя нищо освен лог файла.
+Run by GitHub Actions after the build (see .github/workflows/build.yml),
+without a screen (Qt "offscreen"). Checks what most often breaks unnoticed
+in a build: libraries missing from the package, Qt, Tesseract, text
+recognition, offline translation and building the main window. Can also
+be run manually - changes nothing except the log file.
 
-    overlingo --self-test [--argos-models ПАПКА] [--require-argos] [--log ФАЙЛ]
+    overlingo --self-test [--argos-models FOLDER] [--require-argos] [--log FILE]
 
---argos-models  папка със свален модел (CI сваля един предварително, за
-                да не влиза в архива на програмата)
---require-argos без модел проверката на превода е FAIL, а не SKIP
+--argos-models  folder with a downloaded model (CI downloads one beforehand,
+                so it doesn't end up in the program archive)
+--require-argos without a model the translation check is FAIL, not SKIP
 
-Изход: 0 - всичко е наред, 1 - поне една проверка е неуспешна.
+Exit code: 0 - all good, 1 - at least one check failed.
 """
 
 import os
@@ -34,15 +34,15 @@ class _Report:
         self.lines.append(line)
         if status == "FAIL":
             self.failed = True
-        if sys.stdout is not None:  # Windows билдът е без конзола - тогава само във файла
+        if sys.stdout is not None:  # the Windows build has no console - then only to the file
             print(line, flush=True)
 
     def run(self, name, check):
-        """check() връща текст за лога, ("SKIP", причина) или хвърля грешка."""
+        """check() returns text for the log, ("SKIP", reason) or raises an exception."""
         start = time.monotonic()
         try:
             result = check()
-        except Exception as e:  # noqa: BLE001 - всяка грешка е резултат от проверката
+        except Exception as e:  # noqa: BLE001 - any exception is a result of the check
             self.add("FAIL", name, f"{type(e).__name__}: {e}")
             detail = traceback.format_exc()
             self.lines.append(detail)
@@ -72,7 +72,7 @@ def _arg_value(argv, name):
 
 def run_self_test(argv):
     if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(errors="replace")  # конзола без UTF-8 - без UnicodeEncodeError
+        sys.stdout.reconfigure(errors="replace")  # non-UTF-8 console - avoid UnicodeEncodeError
     from utils.config import DATA_DIR
 
     report = _Report(_arg_value(argv, "--log") or DATA_DIR / "selftest.log")
@@ -109,25 +109,25 @@ def run_self_test(argv):
         import pytesseract
         path = configure_tesseract()
         if path is None:
-            raise RuntimeError("Tesseract не е намерен на познатите места")
-        return f"{path} (версия {pytesseract.get_tesseract_version()})"
+            raise RuntimeError("Tesseract not found in the known locations")
+        return f"{path} (version {pytesseract.get_tesseract_version()})"
 
     tesseract_ok = report.run("tesseract", tesseract) is not None
 
     def ocr():
         if not tesseract_ok:
-            return ("SKIP", "няма Tesseract")
+            return ("SKIP", "no Tesseract")
         import cv2
         import numpy as np
         import pytesseract
-        # Текстът се рисува с вградения шрифт на OpenCV, не с Qt: в режим
-        # "offscreen" (без екран) Qt на Windows няма шрифтове и картинката
-        # оставаше празна.
+        # The text is drawn with OpenCV's built-in font, not with Qt: in
+        # "offscreen" mode (no screen) Qt on Windows has no fonts and the
+        # image stayed blank.
         array = np.full((180, 1100), 255, np.uint8)
         cv2.putText(array, "Hello world 2026", (30, 120), cv2.FONT_HERSHEY_DUPLEX, 2.6, 0, 5, cv2.LINE_AA)
         text = pytesseract.image_to_string(array, lang="eng").strip()
         if "hello" not in text.lower():
-            raise RuntimeError(f"очаквах 'Hello world 2026', разпознато: {text!r}")
+            raise RuntimeError(f"expected 'Hello world 2026', recognized: {text!r}")
         return repr(text)
 
     report.run("ocr", ocr)
@@ -144,31 +144,31 @@ def run_self_test(argv):
         pairs = sorted(argos.installed_pairs(models_dir))
         if not pairs:
             if require_argos:
-                raise RuntimeError(f"няма свален модел в {models_dir or argos.MODELS_DIR}")
-            return ("SKIP", "няма свален модел (--argos-models)")
+                raise RuntimeError(f"no downloaded model in {models_dir or argos.MODELS_DIR}")
+            return ("SKIP", "no downloaded model (--argos-models)")
         source, target = pairs[0]
         result = argos.ArgosTranslator(source, models_dir).translate("Hello world. This is a test.", target)
         if not result.strip():
-            raise RuntimeError("празен превод")
+            raise RuntimeError("empty translation")
         return f"{source} → {target}: {result!r}"
 
-    # След Qt - точно така се срива на Windows при стар msvcp140.dll (виж main.py).
+    # After Qt - this is exactly how it crashes on Windows with an old msvcp140.dll (see main.py).
     report.run("argos-translate", argos_translate)
 
     def main_window():
         if "app" not in state:
-            return ("SKIP", "няма Qt")
+            return ("SKIP", "no Qt")
         from ui.main_window import MainWindow
         window = MainWindow()
         window.show()
-        # Кратко (под 300 ms) - иначе при липсващ Tesseract би изскочил модалният
-        # диалог (QTimer в MainWindow) и би блокирал проверката.
+        # Keep it short (under 300 ms) - otherwise, with Tesseract missing, the modal
+        # dialog (QTimer in MainWindow) would pop up and block the check.
         for _ in range(3):
             state["app"].processEvents()
             time.sleep(0.03)
         window.close()
         state["app"].processEvents()
-        return "построен и затворен"
+        return "built and closed"
 
     report.run("main-window", main_window)
 

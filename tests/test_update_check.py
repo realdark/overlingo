@@ -19,7 +19,7 @@ class VersionTest(unittest.TestCase):
     def test_numeric_comparison(self):
         self.assertTrue(is_newer("v3.1", "3.0"))
         self.assertTrue(is_newer("3.0.1", "3.0"))
-        self.assertTrue(is_newer("3.10", "3.9"))  # не като текст
+        self.assertTrue(is_newer("3.10", "3.9"))  # not as a string
         self.assertFalse(is_newer("3.0", "3.0"))
         self.assertFalse(is_newer("3.0.0", "3.0"))
         self.assertFalse(is_newer("2.9", "3.0"))

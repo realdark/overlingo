@@ -1,15 +1,15 @@
 """
-ОРКЕСТРАЦИЯ: screenshot → OCR → превод
+ORCHESTRATION: screenshot → OCR → translation
 
-Извадено от ui/main_window.py (_translate_selection_threaded,
-_on_translation_finished). MainWindow вече не знае нищо за mss/OpenCV -
-само реагира на translation_finished / translation_failed сигналите.
+Extracted from ui/main_window.py (_translate_selection_threaded,
+_on_translation_finished). MainWindow no longer knows anything about mss/OpenCV -
+it only reacts to the translation_finished / translation_failed signals.
 
-Има и watchdog: ако цикълът OCR+превод отнеме прекалено дълго (заседнал
-мрежов request и т.н.), потребителят получава грешка вместо вечно
-въртяща се икона за статус. Ако фоновата нишка все пак завърши по-късно,
-резултатът се изхвърля (generation token) - за да не "изскочи" превод,
-за който потребителят вече е получил съобщение за timeout.
+There is also a watchdog: if the OCR+translation cycle takes too long (a stuck
+network request, etc.), the user gets an error instead of a forever
+spinning status icon. If the background thread still finishes later,
+its result is discarded (generation token) - so that no translation "pops up"
+after the user has already been told about the timeout.
 """
 
 from utils.imports import QtCore, pyqtSignal
@@ -19,21 +19,21 @@ from core.translations import TranslationThread
 
 
 class TranslationController(QtCore.QObject):
-    # source_text, translated_text, from_cache, fallback_used (""/"google"/"offline"), font_size (0 = не е мерен), rect
+    # source_text, translated_text, from_cache, fallback_used (""/"google"/"offline"), font_size (0 = not measured), rect
     translation_finished = pyqtSignal(str, str, bool, str, int, object)
-    # error_key (ключ за превод в locales, напр. "screenshot_error",
-    # "translation_timeout", "translation_error"), detail (технически детайл
-    # или празно), source_text (разпознатият текст, ако OCR е минал)
+    # error_key (translation key in locales, e.g. "screenshot_error",
+    # "translation_timeout", "translation_error"), detail (technical detail
+    # or empty), source_text (the recognized text, if OCR succeeded)
     translation_failed = pyqtSignal(str, str, str)
-    # излъчва се веднага след успешен screenshot (преди OCR+превод) - за да
-    # може UI-ят да покаже overlay-я обратно веднага, вместо да чака целия
-    # (потенциално продължителен) цикъл OCR+превод да завърши.
+    # emitted right after a successful screenshot (before OCR+translation) - so
+    # the UI can show the overlay again immediately instead of waiting for the whole
+    # (potentially lengthy) OCR+translation cycle to finish.
     capture_finished = pyqtSignal()
 
     def __init__(self, translation_cache, timeout_ms):
         super().__init__()
         self.cache = translation_cache
-        # Попълват се от configure() веднага след създаването.
+        # Filled in by configure() right after creation.
         self.translator = None
         self.ocr_lang = None
         self.target_lang = None
@@ -46,17 +46,17 @@ class TranslationController(QtCore.QObject):
         self._watchdog.timeout.connect(self._on_timeout)
 
     def configure(self, translator, ocr_lang, target_lang):
-        """Обновява услугата за превод и езиците (извиква се при промяна на настройки)."""
+        """Updates the translation service and languages (called when settings change)."""
         self.translator = translator
         self.ocr_lang = ocr_lang
         self.target_lang = target_lang
 
     def translate_region(self, rect, detect_font_size=False):
         """
-        Заснема rect и го превежда асинхронно. Извикващият код (MainWindow)
-        решава сам дали да скрие overlay-я преди да викне това и го връща
-        обратно веднага след capture_finished - контролерът не се занимава
-        с overlay видимост, само със самия превод.
+        Captures rect and translates it asynchronously. The calling code (MainWindow)
+        decides itself whether to hide the overlay before calling this and shows it
+        again right after capture_finished - the controller doesn't deal with
+        overlay visibility, only with the translation itself.
         """
         try:
             gray = capture_region_as_gray(rect)
@@ -64,9 +64,9 @@ class TranslationController(QtCore.QObject):
             self.translation_failed.emit(str(e), "", "")
             return
 
-        # Screenshot-ът вече е направен - overlay-ят (ако е бил скрит заради
-        # застъпване с rect) вече може да се покаже обратно. Не чакаме OCR+
-        # превода (може да отнеме секунди), за да не виси излишно скрит.
+        # The screenshot is already taken - the overlay (if it was hidden because it
+        # overlapped rect) can be shown again now. We don't wait for OCR+
+        # translation (it may take seconds), so it isn't hidden needlessly.
         self.capture_finished.emit()
 
         self._generation += 1
@@ -94,12 +94,12 @@ class TranslationController(QtCore.QObject):
         self._watchdog.start(self.timeout_ms)
 
     def _on_timeout(self):
-        """Изтекло е максималното време за изчакване - освобождаваме UI-а."""
+        """The maximum wait time has elapsed - release the UI."""
         logger.warning(
-            f"Преводът отне повече от {self.timeout_ms / 1000:.0f}s - "
-            f"прекратявам изчакването (фоновата нишка може все още да завърши по-късно)."
+            f"Translation took longer than {self.timeout_ms / 1000:.0f}s - "
+            f"giving up waiting (the background thread may still finish later)."
         )
-        self._generation += 1  # обезсилва закъснял резултат от старата нишка
+        self._generation += 1  # invalidates a late result from the old thread
         self.translation_failed.emit("translation_timeout", "", "")
 
     def _on_failed(self, generation, source_text, error_key, detail):
@@ -111,7 +111,7 @@ class TranslationController(QtCore.QObject):
     def _on_finished(self, generation, source_text, translated_text, from_cache, fallback_used,
                       font_size, rect):
         if generation != self._generation:
-            logger.info("Резултат от превод пристигна след timeout - игнориран.")
+            logger.info("Translation result arrived after timeout - ignored.")
             return
 
         self._watchdog.stop()

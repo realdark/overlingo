@@ -1,16 +1,16 @@
 """
-ПОКАЗВАНЕ НАД ПРИЛОЖЕНИЯ НА ЦЯЛ ЕКРАН (само Linux/X11)
+SHOWING ABOVE FULLSCREEN APPLICATIONS (Linux/X11 only)
 
-Под X11 прозорец "винаги отгоре" не стои над приложение на цял екран
-(игра, видео). Ако такова е активно, прозорецът получава флага
-X11BypassWindowManagerHint и тогава се вижда. На всяка секунда се
-проверява дали нещо е на цял екран и флаговете се сменят при нужда.
+Under X11 an "always on top" window does not stay above a fullscreen
+application (game, video). If one is active, the window gets the
+X11BypassWindowManagerHint flag and then becomes visible. Every second we
+check whether something is fullscreen and change the flags if needed.
 
-Проверката (xprop) е обща за всички прозорци и се пази за около секунда -
-лентата и overlay-ят не пускат всеки свои процеси. Ако xprop липсва
-(напр. под Wayland), повече не се опитва и се приема, че няма приложение на
-цял екран. (Резервна проверка през Qt няма смисъл: QApplication вижда само
-собствените ни прозорци, т.е. би "засякла" само прозореца за маркиране.)
+The check (xprop) is shared by all windows and cached for about a second -
+the toolbar and the overlay don't each spawn their own processes. If xprop is
+missing (e.g. under Wayland), it is not retried and we assume there is no
+fullscreen app. (A fallback check via Qt is pointless: QApplication only sees
+our own windows, i.e. it would only "detect" the selection window.)
 """
 
 import subprocess
@@ -25,7 +25,7 @@ _CACHE_SECONDS = 0.9
 
 
 class FullscreenDetector(QtCore.QObject):
-    """Следи дали има приложение на цял екран и сменя флаговете на прозореца-родител."""
+    """Watches for a fullscreen application and changes the parent window's flags."""
 
     _cached_active = False
     _cached_at = 0.0
@@ -41,8 +41,8 @@ class FullscreenDetector(QtCore.QObject):
 
     def stop(self):
         """
-        Спира проверката. ЗАДЪЛЖИТЕЛНО се вика, когато прозорецът-родител се
-        затваря - иначе таймерът продължава върху скрит прозорец.
+        Stops the check. MUST be called when the parent window closes -
+        otherwise the timer keeps running on a hidden window.
         """
         if self.update_timer:
             self.update_timer.stop()
@@ -51,7 +51,7 @@ class FullscreenDetector(QtCore.QObject):
 
     @classmethod
     def is_fullscreen_application_active(cls):
-        """Има ли активен прозорец на цял екран. Резултатът се пази ~1 s за всички прозорци."""
+        """Whether a fullscreen window is active. The result is cached ~1 s for all windows."""
         if not IS_LINUX:
             return False
         now = time.monotonic()
@@ -75,7 +75,7 @@ class FullscreenDetector(QtCore.QObject):
                                     capture_output=True, text=True, timeout=2)
             return "_NET_WM_STATE_FULLSCREEN" in result.stdout
         except FileNotFoundError:
-            logger.info("xprop липсва - показването над приложения на цял екран е изключено.")
+            logger.info("xprop is missing - showing above fullscreen applications is disabled.")
             cls._xprop_available = False
             return False
         except Exception:
@@ -89,17 +89,17 @@ class FullscreenDetector(QtCore.QObject):
         return base_flags
 
     def apply_window_flags(self, window, base_flags):
-        """Задава началните флагове на прозореца (вика се при създаването му)."""
+        """Sets the window's initial flags (called when it is created)."""
         window.setWindowFlags(self._desired_flags(base_flags))
 
     def _auto_update_check(self):
-        """На всяка секунда: сменя флаговете само ако статусът "цял екран" се е променил."""
+        """Every second: changes the flags only if the "fullscreen" status has changed."""
         window = self.parent()
         if window is None:
             return
-        # Скрит или минимизиран прозорец не се пипа - show() по-долу би го
-        # показал насила (напр. overlay-я, скрит за момента на screenshot-а,
-        # или лентата, минимизирана от потребителя).
+        # A hidden or minimized window is left alone - show() below would
+        # force it visible (e.g. the overlay, hidden while the screenshot is
+        # taken, or the toolbar, minimized by the user).
         if not window.isVisible() or window.isMinimized():
             return
         try:
@@ -107,6 +107,6 @@ class FullscreenDetector(QtCore.QObject):
             desired = self._desired_flags(current & ~QtCore.Qt.X11BypassWindowManagerHint)
             if desired != current:
                 window.setWindowFlags(desired)
-                window.show()  # setWindowFlags скрива прозореца
+                window.show()  # setWindowFlags hides the window
         except Exception as e:
             logger.error(f"Auto-update error: {e}", exc_info=True)

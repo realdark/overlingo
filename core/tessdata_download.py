@@ -1,18 +1,18 @@
 """
-ИЗТЕГЛЯНЕ НА TESSERACT ЕЗИКОВИ ДАННИ (.traineddata) ОТ ПРИЛОЖЕНИЕТО
+DOWNLOADING TESSERACT LANGUAGE DATA (.traineddata) FROM WITHIN THE APP
 
-Тегли директно от официалното GitHub хранилище на Google/tesseract-ocr
-(tessdata_fast - баланс скорост/точност, това ползват и повечето Linux
-дистрибуции по подразбиране), за да не се налага потребителят да търси
-и сваля .traineddata файлове ръчно от браузъра.
+Downloads directly from the official Google/tesseract-ocr GitHub repository
+(tessdata_fast - a speed/accuracy balance, which is also what most Linux
+distributions use by default), so the user doesn't have to find and
+download .traineddata files manually in a browser.
 """
 
 from utils.imports import QThread, pyqtSignal, requests, tempfile, shutil, Path, sys
 from utils.logging_setup import logger
 
-# Пробваме и двата branch-а на хранилището - не е сигурно кой е активният
-# в момента, а провалът е евтин (един бърз 404) в сравнение с това целият
-# бутон да спре да работи при преименуване на branch-а нагоре по веригата.
+# We try both branches of the repository - it's not certain which one is
+# currently active, and a miss is cheap (one quick 404) compared to the whole
+# button breaking if the branch gets renamed upstream.
 TESSDATA_FAST_BRANCHES = ("main", "master")
 TESSDATA_FAST_URL_TEMPLATE = (
     "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/{branch}/{lang}.traineddata"
@@ -20,14 +20,14 @@ TESSDATA_FAST_URL_TEMPLATE = (
 
 
 class TessdataDownloadThread(QThread):
-    # bytes_downloaded, total_bytes (total е -1, ако сървърът не го подаде)
+    # bytes_downloaded, total_bytes (total is -1 if the server doesn't send it)
     progress = pyqtSignal(int, int)
-    # success, message_key, params - при успех ключът е празен, а params
-    # съдържа {"name": езиков код}; при провал UI-ят показва tr(ключ).format(**params)
+    # success, message_key, params - on success the key is empty and params
+    # contains {"name": language code}; on failure the UI shows tr(key).format(**params)
     finished_download = pyqtSignal(bool, str, object)
 
     def __init__(self, lang_code, dest_path):
-        """lang_code - вече почистен от диалога (малки букви, без интервали, не празен)."""
+        """lang_code - already cleaned by the dialog (lowercase, no spaces, not empty)."""
         super().__init__()
         self.lang_code = lang_code
         self.dest_path = dest_path
@@ -49,13 +49,13 @@ class TessdataDownloadThread(QThread):
             total = int(response.headers.get("Content-Length", -1))
             downloaded = 0
 
-            # Сваляме първо във временна папка (винаги достъпна за писане),
-            # НЕ директно в dest_path - системни папки като
-            # "C:\Program Files\Tesseract-OCR\tessdata" изискват
-            # администраторски права за запис на Windows; ако свалянето
-            # директно там гръмне с PermissionError по средата, губим и
-            # изтеглените вече байтове. Така свалянето винаги успява,
-            # само последната стъпка (местенето) може да поиска права.
+            # Download to a temp folder first (always writable), NOT directly
+            # to dest_path - system folders such as
+            # "C:\Program Files\Tesseract-OCR\tessdata" require
+            # administrator rights to write on Windows; if downloading
+            # directly there failed with PermissionError midway, we would
+            # also lose the bytes already downloaded. This way the download
+            # always succeeds, and only the last step (the move) may need rights.
             tmp_path = Path(tempfile.gettempdir()) / f"{self.lang_code}.traineddata.part"
 
             with open(tmp_path, "wb") as f:
@@ -71,10 +71,10 @@ class TessdataDownloadThread(QThread):
                 shutil.move(str(tmp_path), str(self.dest_path))
                 self.finished_download.emit(True, "", {"name": self.lang_code})
             except PermissionError:
-                # Файлът е свален успешно (в tmp_path) - само местенето до
-                # системната папка е блокирано. Даваме ясна, конкретна,
-                # platform-специфична инструкция вместо суровия Python
-                # traceback, и не губим вече свалените байтове.
+                # The file was downloaded successfully (to tmp_path) - only
+                # moving it into the system folder is blocked. Give a clear,
+                # specific, platform-specific instruction instead of the raw
+                # Python traceback, and keep the already downloaded bytes.
                 key = "tessdata_err_permission_windows" if sys.platform == "win32" else "tessdata_err_permission_unix"
                 self.finished_download.emit(
                     False, key, {"folder": str(self.dest_path.parent), "file": str(tmp_path)}
@@ -83,5 +83,5 @@ class TessdataDownloadThread(QThread):
         except requests.exceptions.RequestException as e:
             self.finished_download.emit(False, "network_error_detail", {"error": str(e)})
         except Exception as e:
-            logger.error(f"Грешка при изтегляне на tessdata '{self.lang_code}': {e}", exc_info=True)
+            logger.error(f"Error downloading tessdata '{self.lang_code}': {e}", exc_info=True)
             self.finished_download.emit(False, "unexpected_error_detail", {"error": str(e)})

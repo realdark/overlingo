@@ -1,14 +1,14 @@
-# Билд и автоматична проверка на Overlingo за Windows, Linux и macOS.
+# Build and automated check of Overlingo for Windows, Linux and macOS.
 #
-# Кога тръгва:
-#   - ръчно: Actions -> "Build" -> "Run workflow" (пробен билд; архивите са
-#     в "Artifacts" долу на страницата на изпълнението, пазят се 14 дни);
-#   - при публикуван release в GitHub: билдва и прикача архивите към него.
-#     Тагът трябва да е "v" + APP_VERSION от utils/version.py (напр. v3.3) -
-#     иначе проверката за нова версия в програмата греши, затова билдът спира.
+# When it runs:
+#   - manually: Actions -> "Build" -> "Run workflow" (trial build; the archives
+#     are under "Artifacts" at the bottom of the run page, kept for 14 days);
+#   - on a published GitHub release: builds and attaches the archives to it.
+#     The tag must be "v" + APP_VERSION from utils/version.py (e.g. v3.3) -
+#     otherwise the app's update check goes wrong, so the build stops.
 #
-# За всяка система: тестове -> билд -> сваляне на малък модел за превод без
-# интернет -> "overlingo --self-test" върху ГОТОВИЯ билд (виж core/selftest.py).
+# For each OS: tests -> build -> download a small offline translation
+# model -> "overlingo --self-test" on the FINISHED build (see core/selftest.py).
 
 name: Build
 
@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 env:
-  # Python пише UTF-8 в логовете и на Windows (иначе българският текст гърми).
+  # Python writes UTF-8 to logs on Windows too (otherwise non-ASCII text crashes).
   PYTHONUTF8: "1"
   PYTHONIOENCODING: utf-8
 
@@ -43,8 +43,8 @@ jobs:
       - name: Run tests
         env:
           QT_QPA_PLATFORM: offscreen
-          # Qt, pynput, звук и мрежа - със заместители (виж tests/_stubs.py);
-          # истинският билд се проверява отделно с --self-test.
+          # Qt, pynput, audio and network are stubbed (see tests/_stubs.py);
+          # the real build is checked separately with --self-test.
           OVERLINGO_TEST_STUBS: "1"
         run: python -m unittest discover -s tests -t . -v
 
@@ -60,14 +60,14 @@ jobs:
           TAG="${{ github.event.release.tag_name }}"
           echo "APP_VERSION=$VERSION, tag=$TAG"
           if [ "$TAG" != "v$VERSION" ]; then
-            echo "::error::Тагът $TAG не съвпада с APP_VERSION $VERSION (очаквах v$VERSION) - смени utils/version.py или тага."
+            echo "::error::Tag $TAG does not match APP_VERSION $VERSION (expected v$VERSION) - fix utils/version.py or the tag."
             exit 1
           fi
 
   build:
     name: Build ${{ matrix.name }}
     needs: [version]
-    # При ръчно пускане "version" се пропуска - билдът тръгва въпреки това.
+    # On a manual run "version" is skipped - the build runs anyway.
     if: ${{ !failure() && !cancelled() }}
     strategy:
       fail-fast: false
@@ -78,7 +78,7 @@ jobs:
             artifact: Overlingo-windows-x64
           - name: Linux
             artifact: Overlingo-linux-x86_64
-            os: ubuntu-22.04        # по-стар glibc - билдът тръгва и на по-стари дистрибуции
+            os: ubuntu-22.04        # older glibc - the build also runs on older distros
           - name: macOS Apple Silicon
             os: macos-14
             artifact: Overlingo-macos-apple-silicon
@@ -129,12 +129,12 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          # Билдът е без конзола - резултатът е във файла и в кода на изхода.
+          # The build has no console - the result is in the log file and the exit code.
           $log = Join-Path $env:RUNNER_TEMP "selftest.log"
           $models = Join-Path $env:RUNNER_TEMP "argos-models"
           $p = Start-Process -FilePath "dist\overlingo\overlingo.exe" -Wait -PassThru `
             -ArgumentList "--self-test", "--require-argos", "--argos-models", $models, "--log", $log
-          if (Test-Path $log) { Get-Content $log } else { Write-Host "Няма selftest.log - програмата не е стигнала до проверката" }
+          if (Test-Path $log) { Get-Content $log } else { Write-Host "No selftest.log - the app never reached the check" }
           exit $p.ExitCode
       - name: Self-test of the built app (Linux)
         if: runner.os == 'Linux'

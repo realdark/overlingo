@@ -9,7 +9,7 @@ from core.font_size_detector import FontSizeDetector
 
 
 class CombinationTest(unittest.TestCase):
-    """Сметките върху двете мерки - без Tesseract."""
+    """Calculations on the two measurements - without Tesseract."""
 
     def _detect(self, word, blob):
         detector = FontSizeDetector()
@@ -45,9 +45,9 @@ def _real_ocr_available():
     return shutil.which("tesseract") is not None
 
 
-@unittest.skipUnless(_real_ocr_available(), "нужни са Tesseract, OpenCV и Pillow")
+@unittest.skipUnless(_real_ocr_available(), "requires Tesseract, OpenCV and Pillow")
 class RealTextTest(unittest.TestCase):
-    """Истински текст с известен размер, подготвен като screenshot за OCR."""
+    """Real text of known size, prepared as a screenshot for OCR."""
 
     def _measure(self, size, dark_background):
         import cv2
@@ -61,13 +61,13 @@ class RealTextTest(unittest.TestCase):
         img = Image.new("L", (right - left + 30, bottom - top + 24), bg)
         ImageDraw.Draw(img).text((15 - left, 12 - top), text, font=font, fill=fg)
         gray = np.array(img)
-        # същата подготовка като core/capture.py
+        # same preprocessing as core/capture.py
         _, gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         gray = cv2.resize(gray, None, fx=OCR_UPSCALE, fy=OCR_UPSCALE, interpolation=cv2.INTER_CUBIC)
         return FontSizeDetector("eng").detect(gray, scale=OCR_UPSCALE)
 
     def test_sizes_within_25_percent(self):
-        for size in (16, 24, 40):  # 40 px - едрият текст, който старата версия изпускаше
+        for size in (16, 24, 40):  # 40 px - the large text the old version missed
             for dark in (True, False):
                 measured = self._measure(size, dark)
                 self.assertIsNotNone(measured, size)

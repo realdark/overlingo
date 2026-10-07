@@ -1,8 +1,8 @@
 """
-ДИАЛОГ С НАСТРОЙКИ
+SETTINGS DIALOG
 
-Полетата на формата се дефинират декларативно в _field_specs(), а
-стойностите се четат по ИМЕ (widgets dict), не по позиция.
+The form fields are defined declaratively in _field_specs(), and
+values are read by NAME (widgets dict), not by position.
 """
 
 from utils.imports import QtWidgets, QtCore
@@ -26,11 +26,11 @@ TEXT_COLOR_CHOICES = {
 class SettingsDialog(QtWidgets.QDialog):
     """
     settings_manager: core.settings_manager.SettingsManager
-    i18n:             core.localization.UiLocalizer (за текстове)
-    current_settings: dict със стойностите, от които да тръгне формата
-    on_opacity_preview: callback(value:int), извикван докато плъзгачът се движи
-                        (за да се вижда промяната веднага на overlay-я)
-    on_save:          callback(settings:dict), извикван само след успешна валидация
+    i18n:             core.localization.UiLocalizer (for texts)
+    current_settings: dict with the values the form starts from
+    on_opacity_preview: callback(value:int), called while the slider is moving
+                        (so the change is visible on the overlay immediately)
+    on_save:          callback(settings:dict), called only after successful validation
     """
 
     def __init__(self, parent, settings_manager, i18n, current_settings,
@@ -46,23 +46,23 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setWindowTitle(self.i18n.tr("settings_title"))
         self.setMinimumWidth(520)
         self._build_ui()
-        # Без изрично центриране спрямо екрана - Qt по подразбиране
-        # позиционира диалога спрямо родителя (малката лента), точно както
-        # About/Help/Tesseract диалозите. Ако диалогът излезе извън
-        # видимата част на екрана при определени позиции на лентата,
-        # това е компромисът за консистентност с останалите прозорци.
+        # No explicit centering on the screen - by default Qt
+        # positions the dialog relative to its parent (the small toolbar), just like
+        # the About/Help/Tesseract dialogs. If the dialog ends up outside
+        # the visible screen area for certain toolbar positions,
+        # that is the trade-off for consistency with the other windows.
 
     # ------------------------------------------------------------------
-    # Изграждане на формата
+    # Building the form
     # ------------------------------------------------------------------
 
     def _build_ui(self):
         main_layout = QtWidgets.QVBoxLayout(self)
         self._argos_thread = None
 
-        # Полетата вече са групирани по таб (виж "tab" ключа в _field_specs) -
-        # всеки таб получава своя собствена решетка, за да не се налага
-        # една безкрайна скролираща листа с ~20 реда наведнъж.
+        # Fields are grouped by tab (see the "tab" key in _field_specs) -
+        # each tab gets its own grid, so we don't end up with
+        # one endless scrolling list of ~20 rows at once.
         tabs = QtWidgets.QTabWidget()
         tab_order = [
             ("interface", "settings_tab_interface"),
@@ -77,7 +77,7 @@ class SettingsDialog(QtWidgets.QDialog):
         for tab_key, tab_label_key in tab_order:
             tab_specs = specs_by_tab.get(tab_key)
             if not tab_specs:
-                continue  # напр. "hotkey" липсва, където глобалните hotkey-и не се поддържат
+                continue  # e.g. "hotkey" is absent where global hotkeys aren't supported
 
             tab_page = QtWidgets.QWidget()
             grid = QtWidgets.QGridLayout(tab_page)
@@ -92,10 +92,10 @@ class SettingsDialog(QtWidgets.QDialog):
                 row += 1
 
                 if spec["name"] == "ocr_combo":
-                    # Ред за сваляне на нов OCR език - директно от официалното
-                    # GitHub хранилище на tesseract-ocr (tessdata_fast), без
-                    # потребителят да ходи в браузъра. Отделно от декларативната
-                    # схема по-горе, защото стартира фонова streaming задача.
+                    # Row for downloading a new OCR language - straight from the official
+                    # tesseract-ocr GitHub repository (tessdata_fast), without
+                    # the user going to a browser. Separate from the declarative
+                    # schema above because it starts a background streaming task.
                     self._tessdata_thread = None
                     lang_row = QtWidgets.QHBoxLayout()
                     self.tessdata_lang_edit = QtWidgets.QLineEdit()
@@ -120,9 +120,9 @@ class SettingsDialog(QtWidgets.QDialog):
                     row += 1
 
                 if spec["name"] == "target_edit":
-                    # Превод без интернет (Argos): моделите са по двойка езици
-                    # (език на текста -> целеви език) и се свалят оттук. Важат и
-                    # като резервен вариант за онлайн услугите, когато няма интернет.
+                    # Offline translation (Argos): models are per language pair
+                    # (source language -> target language) and are downloaded here. They also
+                    # serve as a fallback for the online services when there is no internet.
                     self.argos_download_btn = QtWidgets.QPushButton(self.i18n.tr("argos_download_button"))
                     self.argos_download_btn.clicked.connect(self._handle_download_argos)
                     self.argos_download_btn.setToolTip(self.i18n.tr("argos_download_tooltip"))
@@ -144,7 +144,7 @@ class SettingsDialog(QtWidgets.QDialog):
                     self._refresh_argos_installed()
                     self.widgets["api_combo"].currentIndexChanged.connect(self._refresh_argos_installed)
 
-            grid.setRowStretch(row, 1)  # избутва съдържанието нагоре, ако табът е по-къс от другите
+            grid.setRowStretch(row, 1)  # pushes the content up if the tab is shorter than the others
             tabs.addTab(tab_page, self.i18n.tr(tab_label_key))
 
         main_layout.addWidget(tabs)
@@ -165,7 +165,7 @@ class SettingsDialog(QtWidgets.QDialog):
         main_layout.addLayout(save_row)
 
     def _field_specs(self):
-        """Декларативен списък: едно място, откъдето растат и формата, и widgets речника."""
+        """Declarative list: the single source for both the form and the widgets dict."""
         s = self.current
 
         def language_combo():
@@ -237,10 +237,10 @@ class SettingsDialog(QtWidgets.QDialog):
             return make
 
         def audio_lang_combo():
-            # Редактируем - работи веднага, дори офлайн (все едно е
-            # текстово поле). Списъкът с гласове идва по-късно, асинхронно
-            # (виж _start_voices_fetch) - изисква мрежа за Microsoft
-            # endpoint-а, затова не блокираме отварянето на диалога с него.
+            # Editable - works immediately, even offline (as if it were
+            # a text field). The voice list arrives later, asynchronously
+            # (see _start_voices_fetch) - it needs network access for the Microsoft
+            # endpoint, so we don't block opening the dialog on it.
             w = QtWidgets.QComboBox()
             w.setEditable(True)
             current = s.get("audio_lang", "")
@@ -252,10 +252,10 @@ class SettingsDialog(QtWidgets.QDialog):
             return w
 
         def audio_speed_combo():
-            # Готови стойности като в YouTube (0.5x-2x), вместо сурови
-            # проценти - по-разбираемо за потребителя. Конвертира се към
-            # edge-tts "rate" формат (+N%/-N%) чак при пускане на звука
-            # (виж core/audio_handler.py).
+            # Preset values like on YouTube (0.5x-2x), instead of raw
+            # percentages - easier for the user to understand. Converted to
+            # the edge-tts "rate" format (+N%/-N%) only when playback starts
+            # (see core/audio_handler.py).
             w = QtWidgets.QComboBox()
             speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
             current = s.get("audio_speed", 1.0)
@@ -270,10 +270,10 @@ class SettingsDialog(QtWidgets.QDialog):
             w = QtWidgets.QComboBox()
             available = get_available_ocr_languages()
             current = s.get("ocr_lang", "eng")
-            # Ако текущо записаният език по някаква причина не е сред
-            # намерените .traineddata файлове (напр. tessdata папката е
-            # различна оттогава), пак го добавяме - за да не изчезне тихо
-            # избора на потребителя само защото сме сменили tessdata.
+            # If the currently saved language is for some reason not among
+            # the .traineddata files found (e.g. the tessdata folder is
+            # different now), add it anyway - so the user's choice doesn't
+            # silently disappear just because tessdata changed.
             if current and current not in available:
                 available = sorted(available + [current])
             for lang in available:
@@ -302,10 +302,10 @@ class SettingsDialog(QtWidgets.QDialog):
             {"name": "audio_speed_combo", "label_key": "audio_speed_label", "make": audio_speed_combo, "tab": "audio"},
         ]
 
-        # Глобален hotkey - Windows и Linux/X11 (виж core/hotkey_manager.py
-        # за причините Wayland/macOS да останат изключени). На неподдържани
-        # платформи тези полета изобщо не се появяват в Settings, вместо да
-        # се показват деактивирани - по-ясно за потребителя.
+        # Global hotkey - Windows and Linux/X11 (see core/hotkey_manager.py
+        # for why Wayland/macOS stay disabled). On unsupported
+        # platforms these fields don't appear in Settings at all, instead of
+        # being shown disabled - clearer for the user.
         if HOTKEY_SUPPORTED:
             specs.append({
                 "name": "hotkey_checkbox", "label_key": "hotkey_enabled_label",
@@ -324,7 +324,7 @@ class SettingsDialog(QtWidgets.QDialog):
         return specs
 
     def _wire_dependencies(self):
-        """Overlay изключен → изключва зависимите настройки (preserve font / auto refresh / API key)."""
+        """Overlay off → disables the dependent settings (preserve font / auto refresh / API key)."""
         w = self.widgets
 
         def update():
@@ -352,11 +352,11 @@ class SettingsDialog(QtWidgets.QDialog):
         update()
 
     # ------------------------------------------------------------------
-    # Четене на стойности / запазване
+    # Reading values / saving
     # ------------------------------------------------------------------
 
     def values(self):
-        """Чете текущите стойности от формата по ИМЕ на widget-а."""
+        """Reads the current form values by widget NAME."""
         w = self.widgets
         result = {
             "text_size": w["text_size_spin"].value(),
@@ -376,26 +376,26 @@ class SettingsDialog(QtWidgets.QDialog):
             "translation_api": w["api_combo"].currentData(),
             "hide_overlay_enabled": w["hide_overlay_checkbox"].isChecked(),
         }
-        # hotkey_* полетата съществуват само на Windows и Linux/X11 (виж _field_specs) -
-        # на другите платформи просто не пипаме съществуващите стойности.
+        # hotkey_* fields exist only on Windows and Linux/X11 (see _field_specs) -
+        # on other platforms we simply leave the existing values untouched.
         if HOTKEY_SUPPORTED:
             result["hotkey_enabled"] = w["hotkey_checkbox"].isChecked()
             result["hotkey_combo"] = w["hotkey_edit"].text().strip() or "<ctrl>+<alt>+t"
-            # празно = без hotkey за "Преведи отново"
+            # empty = no hotkey for "Translate again"
             result["hotkey_retranslate_combo"] = w["hotkey_retranslate_edit"].text().strip()
         return result
 
     def _start_voices_fetch(self):
-        """Тегли списъка с edge-tts гласове на заден фон (не блокира диалога)."""
+        """Fetches the edge-tts voice list in the background (doesn't block the dialog)."""
         self._voices_thread = EdgeVoicesThread()
         self._voices_thread.voices_ready.connect(self._on_voices_ready)
         self._voices_thread.failed.connect(
-            lambda e: logger.warning(f"Не успях да заредя списъка с гласове (без мрежа?): {e}")
+            lambda e: logger.warning(f"Could not load the voice list (no network?): {e}")
         )
         self._voices_thread.start()
 
     def _on_voices_ready(self, voice_names):
-        """Допълва падащото меню за аудио език, без да променя вече въведеното от потребителя."""
+        """Fills the audio language dropdown without changing what the user has already typed."""
         combo = self.widgets["audio_combo"]
         current_text = combo.currentText()
         combo.blockSignals(True)
@@ -407,9 +407,9 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _configure_combo_completer(self, combo):
         """
-        По подразбиране редактируем QComboBox слага completer в inline
-        режим (само дописва текста) - без това popup списъкът с
-        предложения изобщо не се показва, докато пишеш.
+        By default an editable QComboBox puts the completer in inline
+        mode (it only autocompletes the text) - without this the popup list of
+        suggestions never shows up while you type.
         """
         completer = combo.completer()
         if completer:
@@ -418,11 +418,11 @@ class SettingsDialog(QtWidgets.QDialog):
 
     def _start_download(self, thread, status_label, download_btn, downloading_key):
         """
-        Общо начало за 'изтегли и следи прогреса' потоците (tessdata език /
-        модели за превод без интернет) - деактивира бутона, показва начален
-        статус, стартира нишката. Самите progress сигнали остават отделни
-        по-долу, защото имат различни сигнатури, но стартът и краят са
-        идентични.
+        Common start for the 'download and track progress' flows (tessdata language /
+        offline translation models) - disables the button, shows the initial
+        status, starts the thread. The progress signals themselves stay separate
+        below because they have different signatures, but start and finish are
+        identical.
         """
         download_btn.setEnabled(False)
         status_label.setText(self.i18n.tr(downloading_key))
@@ -431,9 +431,9 @@ class SettingsDialog(QtWidgets.QDialog):
     def _finish_download(self, status_label, download_btn, success, message_key, params, done_key,
                           on_success=None):
         """
-        Общ завършек - виж _start_download за контекста защо е отделено от
-        прогреса. При успех params["name"] е изтегленото (език/модел), при
-        провал съобщението е tr(message_key) с попълнени params.
+        Common finish - see _start_download for why it is separate from
+        progress. On success params["name"] is what was downloaded (language/model), on
+        failure the message is tr(message_key) with params filled in.
         """
         download_btn.setEnabled(True)
         message = params.get("name", "") if success else self.i18n.tr(message_key).format(**params)
@@ -442,13 +442,13 @@ class SettingsDialog(QtWidgets.QDialog):
             if on_success:
                 on_success(message)
         else:
-            # Pop-up вместо инлайн текст - същия стил като останалите
-            # грешки в диалога.
+            # Pop-up instead of inline text - same style as the other
+            # errors in the dialog.
             status_label.setText("")
             QtWidgets.QMessageBox.critical(self, self.i18n.tr("warning_title"), message)
 
     def _handle_download_tessdata(self):
-        """Тегли .traineddata от tessdata_fast и опреснява списъка с OCR езици при успех."""
+        """Downloads .traineddata from tessdata_fast and refreshes the OCR language list on success."""
         lang_code = self.tessdata_lang_edit.text().strip().lower()
         if not lang_code:
             return
@@ -470,7 +470,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
     @staticmethod
     def _progress_text(downloaded, total):
-        """"42%", или "3.5 MB", ако сървърът не е казал размера."""
+        """"42%", or "3.5 MB" if the server didn't report the size."""
         if total > 0:
             return f"{int(downloaded * 100 / total)}%"
         return f"{downloaded / (1024 * 1024):.1f} MB"
@@ -486,7 +486,7 @@ class SettingsDialog(QtWidgets.QDialog):
         )
 
     def _refresh_ocr_lang_combo(self, select=None):
-        """Презарежда падащото меню с OCR езици след успешно изтегляне."""
+        """Reloads the OCR language dropdown after a successful download."""
         combo = self.widgets["ocr_combo"]
         combo.blockSignals(True)
         combo.clear()
@@ -499,29 +499,29 @@ class SettingsDialog(QtWidgets.QDialog):
         combo.blockSignals(False)
 
     def _argos_languages(self):
-        """(език на текста, целеви език) според текущо избраното във формата."""
+        """(source language, target language) per the current form selection."""
         source = argos.source_language(self.widgets["ocr_combo"].currentData() or "eng")
         target = (self.widgets["target_edit"].text().strip() or "BG").lower()[:2]
         return source, target
 
     def _refresh_argos_installed(self, _name=None):
-        """Показва свалените двойки езици за превод без интернет."""
+        """Shows the downloaded language pairs for offline translation."""
         pairs = sorted(argos.installed_pairs())
         text = ", ".join(argos.pair_label(p) for p in pairs) if pairs else self.i18n.tr("argos_none_installed")
         if pairs and self.widgets["api_combo"].currentData() != "argos":
-            # С онлайн услуга моделите се ползват само когато няма интернет.
+            # With an online service the models are used only when there is no internet.
             text = f"{text} {self.i18n.tr('argos_fallback_hint')}"
         self.argos_installed_label.setText(f"{self.i18n.tr('argos_installed_label')} {text}")
 
     def _handle_download_argos(self):
-        """Сваля моделите за превод без интернет за текущите езици (директно или през английски)."""
+        """Downloads the offline translation models for the current languages (direct or via English)."""
         if not argos.libraries_available():
             QtWidgets.QMessageBox.critical(
                 self, self.i18n.tr("warning_title"), self.i18n.tr("argos_not_installed")
             )
             return
         if ArgosDownloadThread.is_busy():
-            # Сваляне, пуснато от предишно отваряне на Настройки, още тече.
+            # A download started from a previous opening of Settings is still running.
             self.argos_download_btn.setEnabled(False)
             self.argos_download_status.setText(self.i18n.tr("argos_downloading"))
             return
@@ -550,10 +550,10 @@ class SettingsDialog(QtWidgets.QDialog):
         )
 
     def _handle_reset(self):
-        """Връща всички настройки към стойностите по подразбиране (без API ключа) и затваря диалога."""
-        # Собствени бутони вместо стандартните Yes/No - текстът на
-        # стандартните идва от преводите на самия Qt, които не зареждаме,
-        # затова излизаха на английски и при български интерфейс.
+        """Resets all settings to their defaults (except the API key) and closes the dialog."""
+        # Custom buttons instead of the standard Yes/No - the standard ones'
+        # text comes from Qt's own translations, which we don't load,
+        # so they showed up in English even with the Bulgarian UI.
         msg = QtWidgets.QMessageBox(self)
         msg.setIcon(QtWidgets.QMessageBox.Question)
         msg.setWindowTitle(self.i18n.tr("reset_defaults_button"))

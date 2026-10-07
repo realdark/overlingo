@@ -1,9 +1,9 @@
 """
-ИСТОРИЯ НА ПРЕВОДИТЕ
+TRANSLATION HISTORY
 
-Пази последните N превода само докато програмата е отворена (нищо не се
-записва на диска - текстът от екрана може да е личен). Не зависи от Qt -
-UI-ят (ui/history_window.py) само чете items().
+Keeps the last N translations only while the program is open (nothing is
+written to disk - the text from the screen may be private). Does not depend on Qt -
+the UI (ui/history_window.py) only reads items().
 """
 
 from dataclasses import dataclass
@@ -20,14 +20,14 @@ class HistoryEntry:
 class TranslationHistory:
     def __init__(self, max_items=DEFAULT_MAX_ITEMS):
         self.max_items = max_items
-        self._entries = []  # най-новият е първи
+        self._entries = []  # newest first
 
     def add(self, source, translation):
         """
-        Добавя превод най-отгоре. Ако същият изходен текст вече го има
-        (напр. при авто-рефреш или "Преведи отново" върху непроменен
-        текст), старият запис се маха - иначе историята се пълни с копия.
-        Празен текст или превод не се записват.
+        Adds a translation at the top. If the same source text is already present
+        (e.g. on auto-refresh or "Translate again" on unchanged
+        text), the old entry is removed - otherwise the history fills up with duplicates.
+        Empty text or translation is not recorded.
         """
         source = (source or "").strip()
         translation = (translation or "").strip()
@@ -39,7 +39,7 @@ class TranslationHistory:
         del self._entries[self.max_items:]
 
     def items(self):
-        """Копие на записите, най-новият първи."""
+        """A copy of the entries, newest first."""
         return list(self._entries)
 
     def clear(self):
@@ -55,9 +55,9 @@ def _normalize(text):
 
 class SessionStats:
     """
-    Колко превода са направени в текущата сесия и колко от тях са дошли от
-    кеша (без заявка към услугата - полезно при платен ключ). Брои и
-    превода от екрана, и прозореца за превод на текст. Не се пази на диска.
+    How many translations were made in the current session and how many of them came from
+    the cache (no request to the service - useful with a paid key). Counts both
+    screen translations and the text translation window. Not stored on disk.
     """
 
     def __init__(self):

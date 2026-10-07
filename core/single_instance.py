@@ -1,14 +1,14 @@
 """
-САМО ЕДНО КОПИЕ НА ПРОГРАМАТА
+ONLY ONE INSTANCE OF THE PROGRAM
 
-Две едновременно отворени Overlingo си пречат (двата слушат един и същ
-hotkey и пишат в един settings.json). Първото копие отваря локален
-"канал" (QLocalServer - named pipe на Windows, socket файл на Linux/macOS).
-Всяко следващо стартиране първо пробва да се свърже към него: ако успее,
-моли отвореното копие да се покаже и само излиза.
+Two Overlingo instances open at once interfere with each other (both
+listen to the same hotkey and write to the same settings.json). The first
+instance opens a local "channel" (QLocalServer - a named pipe on Windows,
+a socket file on Linux/macOS). Every later launch first tries to connect
+to it: if it succeeds, it asks the open instance to show itself and exits.
 
-Името на канала съдържа потребителя - двама души на един компютър си
-имат по едно свое копие.
+The channel name includes the user - two people on one computer each get
+their own instance.
 """
 
 import getpass
@@ -27,7 +27,7 @@ def _server_name():
 
 
 class SingleInstance(QtCore.QObject):
-    # друго стартиране е поискало вече отвореното копие да се покаже
+    # another launch asked the already open instance to show itself
     activation_requested = QtCore.pyqtSignal()
 
     def __init__(self, parent=None):
@@ -36,7 +36,7 @@ class SingleInstance(QtCore.QObject):
         self._server = None
 
     def notify_running_instance(self, timeout_ms=500):
-        """True, ако вече има отворено копие (и то е помолено да се покаже)."""
+        """True if an instance is already open (and it has been asked to show itself)."""
         socket = QtNetwork.QLocalSocket()
         socket.connectToServer(self._name)
         if not socket.waitForConnected(timeout_ms):
@@ -48,14 +48,14 @@ class SingleInstance(QtCore.QObject):
         return True
 
     def listen(self):
-        """Започва да приема молби от следващи стартирания. Вика се само
-        след като notify_running_instance() е върнал False."""
-        # На Linux/macOS канал от сринато предишно копие остава като файл и
-        # пречи на listen() - махаме го. Вече знаем, че никой не слуша на него.
+        """Starts accepting requests from later launches. Call only
+        after notify_running_instance() has returned False."""
+        # On Linux/macOS a channel from a previously crashed instance remains as
+        # a file and blocks listen() - remove it. We already know nobody listens on it.
         QtNetwork.QLocalServer.removeServer(self._name)
         self._server = QtNetwork.QLocalServer(self)
         if not self._server.listen(self._name):
-            logger.warning(f"Защитата от второ копие не можа да стартира: {self._server.errorString()}")
+            logger.warning(f"Second-instance protection could not start: {self._server.errorString()}")
             return False
         self._server.newConnection.connect(self._on_new_connection)
         return True

@@ -1,20 +1,20 @@
 """
-ВХОДНА ТОЧКА НА ПРИЛОЖЕНИЕТО
+APPLICATION ENTRY POINT
 """
 
 import sys
 
-# Windows: ctranslate2 (превод без интернет) се зарежда ПРЕДИ PyQt5/OpenCV.
-# PyQt5 носи по-стара версия на C++ библиотеката msvcp140.dll; ако тя е
-# заредена първа, ctranslate2 (компилиран с по-нова) я ползва и при първия
-# превод процесът пада без никаква грешка. Заредена първа, по-новата
-# системна версия важи за всички.
+# Windows: ctranslate2 (offline translation) is loaded BEFORE PyQt5/OpenCV.
+# PyQt5 ships an older version of the C++ library msvcp140.dll; if it is
+# loaded first, ctranslate2 (compiled against a newer one) uses it and the
+# process dies on the first translation without any error. Loaded first, the
+# newer system version applies to everyone.
 if sys.platform == "win32":
     try:
         import ctranslate2  # noqa: F401
         import sentencepiece  # noqa: F401
     except Exception:
-        pass  # не са инсталирани - преводът без интернет просто няма да е наличен
+        pass  # not installed - offline translation simply won't be available
 
 from utils.imports import sys, os, QtWidgets, QtGui, QtCore
 from utils.logging_setup import logger
@@ -23,24 +23,24 @@ from core.single_instance import SingleInstance
 from ui.main_window import MainWindow
 
 def load_theme(app):
-    """Прилага общата тъмна тема (assets/theme.qss) върху цялото приложение."""
+    """Applies the shared dark theme (assets/theme.qss) to the whole application."""
     try:
         with open(THEME_FILE, "r", encoding="utf-8") as f:
             app.setStyleSheet(f.read())
     except Exception as e:
-        # Липсваща/повредена theme.qss не бива да пречи на стартирането -
-        # приложението просто ще изглежда с default стил на Qt.
-        logger.warning(f"Не успях да заредя темата ({THEME_FILE}): {e}")
+        # A missing/corrupted theme.qss must not prevent startup -
+        # the application will simply use Qt's default style.
+        logger.warning(f"Could not load the theme ({THEME_FILE}): {e}")
 
 def show_splash(app):
     """
-    Показва иконата веднага, докато MainWindow() се строи (Tesseract
-    discovery, зареждане на locale файлове, построяване на UI-а) - без
-    това, между двоен клик и появата на прозореца няма никаква видима
-    реакция, особено на по-бавна машина, и потребителят може да си
-    помисли, че нищо не се е случило (и да кликне пак, отваряйки втора
-    инстанция). .png версията на иконата работи навсякъде за QPixmap,
-    независимо от платформата.
+    Shows the icon immediately while MainWindow() is being built (Tesseract
+    discovery, loading locale files, building the UI) - without this, there
+    is no visible reaction between the double-click and the window
+    appearing, especially on a slower machine, and the user may think
+    nothing happened (and click again, opening a second instance). The .png
+    version of the icon works everywhere for QPixmap, regardless of the
+    platform.
     """
     pixmap = QtGui.QPixmap(str(APP_ICON_LINUX))
     if pixmap.isNull():
@@ -49,39 +49,39 @@ def show_splash(app):
     splash = QtWidgets.QSplashScreen(
         pixmap, QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint
     )
-    # Иконата има прозрачни ъгли (заоблена форма) - без това splash
-    # прозорецът щеше да изглежда като плътен квадрат около нея.
+    # The icon has transparent corners (rounded shape) - without this the splash
+    # window would look like a solid square around it.
     splash.setAttribute(QtCore.Qt.WA_TranslucentBackground)
     splash.show()
-    app.processEvents()  # уверява се, че splash-ът реално се рисува веднага
+    app.processEvents()  # makes sure the splash is actually painted right away
     return splash
 
 
 def main():
-    """Основна функция на приложението"""
+    """Main application function"""
     if "--self-test" in sys.argv:
-        # Автоматична проверка на билда (GitHub Actions) - виж core/selftest.py.
+        # Automatic build check (GitHub Actions) - see core/selftest.py.
         from core.selftest import run_self_test
         return run_self_test(sys.argv)
     try:
-        # Работна папка = папката на програмата, независимо откъде е
-        # стартирана (меню с приложения, пряк път, друга папка в
-        # терминала). Всички пътища вече са абсолютни (виж
-        # utils/config.py), това е само допълнителна защита.
+        # Working directory = the program folder, regardless of where it was
+        # launched from (applications menu, shortcut, another folder in the
+        # terminal). All paths are already absolute (see
+        # utils/config.py), this is just an extra safeguard.
         try:
             os.chdir(BASE_DIR)
         except OSError as e:
-            logger.warning(f"Не успях да сменя работната папка към {BASE_DIR}: {e}")
+            logger.warning(f"Could not change the working directory to {BASE_DIR}: {e}")
         app = QtWidgets.QApplication(sys.argv)
-        # Linux: връзва прозореца със стартера overlingo.desktop (от install.sh) -
-        # така лентата/докът показват иконата на програмата (особено под Wayland).
+        # Linux: ties the window to the overlingo.desktop launcher (from install.sh) -
+        # so the taskbar/dock shows the program's icon (especially under Wayland).
         app.setDesktopFileName("overlingo")
 
-        # Ако Overlingo вече е отворена, само я показваме и излизаме -
-        # преди splash-а, за да не мигне излишно (виж core/single_instance.py).
+        # If Overlingo is already open, just show it and exit -
+        # before the splash, so it doesn't flash needlessly (see core/single_instance.py).
         instance = SingleInstance()
         if instance.notify_running_instance():
-            logger.info("Overlingo вече работи - показвам отвореното копие.")
+            logger.info("Overlingo is already running - showing the open instance.")
             return 0
         instance.listen()
 
@@ -91,10 +91,10 @@ def main():
         instance.activation_requested.connect(window.bring_to_front)
         window.show()
         if splash:
-            splash.finish(window)  # затваря splash-а веднага щом прозорецът е готов
+            splash.finish(window)  # closes the splash as soon as the window is ready
         return app.exec_()
     except Exception as e:
-        logger.error(f"Грешка при стартиране: {e}", exc_info=True)
+        logger.error(f"Startup error: {e}", exc_info=True)
         return 1
 
 if __name__ == "__main__":

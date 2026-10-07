@@ -1,5 +1,5 @@
 """
-АУДИО ФУНКЦИОНАЛНОСТ
+AUDIO FUNCTIONALITY
 """
 
 from utils.imports import QThread, QtCore, asyncio, edge_tts, tempfile, pygame, time, os
@@ -15,7 +15,7 @@ class AudioThread(QThread):
         super().__init__()
         self.text = text
         self.audio_lang = audio_lang
-        self.speed = speed  # 1.0 = нормална скорост (както YouTube-ските 0.5x/1x/1.5x/2x)
+        self.speed = speed  # 1.0 = normal speed (like YouTube's 0.5x/1x/1.5x/2x)
         self.temp_file = None
         self._stop_flag = False
 
@@ -28,31 +28,31 @@ class AudioThread(QThread):
         self.cleanup_temp_file()
         
     def cleanup_temp_file(self):
-        """Почистване на временния файл"""
+        """Clean up the temporary file"""
         try:
-            # Спираме музиката първо, за да освободим файла
+            # Stop the music first to release the file
             if pygame.mixer.get_init():
                 pygame.mixer.music.stop()
                 pygame.mixer.music.unload()
             
-            # Малка забавяка за да се освободи файла
+            # Short delay so the file gets released
             time.sleep(0.1)
             
             if self.temp_file:
                 try:
                     os.remove(self.temp_file)
-                    logger.info(f"Изтрит временен файл: {self.temp_file}")
+                    logger.info(f"Deleted temporary file: {self.temp_file}")
                 except (OSError, TypeError) as e:
-                    logger.warning(f"Грешка при изтриване на файл {self.temp_file}: {e}")
+                    logger.warning(f"Error deleting file {self.temp_file}: {e}")
                     
         except Exception as e:
-            logger.error(f"Обща грешка при почистване: {e}", exc_info=True)
+            logger.error(f"General error during cleanup: {e}", exc_info=True)
         finally:
             self.temp_file = None
         
     def __del__(self):
-        """Деструктор - гарантира почистване при изтриване на обекта"""
-        if getattr(self, "temp_file", None):  # getattr - __init__ може да не е стигнал дотук
+        """Destructor - guarantees cleanup when the object is deleted"""
+        if getattr(self, "temp_file", None):  # getattr - __init__ may not have got this far
             self.cleanup_temp_file()
 
     async def _play_edge_tts(self):
@@ -63,16 +63,16 @@ class AudioThread(QThread):
             path = await self._download_audio()
             self._play_audio_blocking(path)
         except Exception as e:
-            logger.error(f"Грешка при аудио възпроизвеждане: {e}", exc_info=True)
+            logger.error(f"Audio playback error: {e}", exc_info=True)
         finally:
             if self.temp_file is not None:
                 self.cleanup_temp_file()
             self.finished_signal.emit()
 
     async def _download_audio(self):
-        """Изтегля синтезираната реч (edge-tts) в локален временен .mp3 файл."""
-        # edge-tts очаква rate като процент отклонение от нормалната скорост
-        # (напр. "+50%"), не множител - 1.5x стойност -> "+50%".
+        """Downloads the synthesized speech (edge-tts) into a local temporary .mp3 file."""
+        # edge-tts expects rate as a percentage offset from normal speed
+        # (e.g. "+50%"), not a multiplier - a 1.5x value -> "+50%".
         rate_percent = round((self.speed - 1.0) * 100)
         rate_str = f"{rate_percent:+d}%"
         communicate = edge_tts.Communicate(self.text, voice=self.audio_lang, rate=rate_str)
@@ -80,7 +80,7 @@ class AudioThread(QThread):
         os.close(fd)
         self.temp_file = path
 
-        # Файлът се отваря веднъж за всички парчета (не за всяко поотделно).
+        # The file is opened once for all chunks (not once per chunk).
         with open(path, "wb") as f:
             async for chunk in communicate.stream():
                 if chunk["type"] == "audio":
@@ -89,7 +89,7 @@ class AudioThread(QThread):
         return path
 
     def _play_audio_blocking(self, path):
-        """Пуска изтегления .mp3 и изчаква (проверявайки _stop_flag), докато свърши."""
+        """Plays the downloaded .mp3 and waits (checking _stop_flag) until it finishes."""
         if not pygame.mixer.get_init():
             pygame.mixer.init()
 
@@ -105,13 +105,13 @@ class AudioThread(QThread):
 
 class EdgeVoicesThread(QThread):
     """
-    Извлича списъка с налични edge-tts гласове (напр. "bg-BG-KalinaNeural"),
-    за да може падащото меню за аудио език в Settings да покаже реален
-    списък, вместо потребителят да гадае/търси имена сам. Изисква мрежа -
-    ако провалиш, полето просто си остава редактируемо, както преди.
+    Fetches the list of available edge-tts voices (e.g. "bg-BG-KalinaNeural"),
+    so the audio language dropdown in Settings can show a real list instead
+    of the user guessing/looking up names themselves. Requires network -
+    if it fails, the field simply stays editable, as before.
     """
 
-    voices_ready = QtCore.pyqtSignal(list)  # сортиран списък от ShortName низове
+    voices_ready = QtCore.pyqtSignal(list)  # sorted list of ShortName strings
     failed = QtCore.pyqtSignal(str)
 
     def run(self):
@@ -120,5 +120,5 @@ class EdgeVoicesThread(QThread):
             names = sorted(v["ShortName"] for v in voices if v.get("ShortName"))
             self.voices_ready.emit(names)
         except Exception as e:
-            logger.error(f"Грешка при извличане на edge-tts гласове: {e}", exc_info=True)
+            logger.error(f"Error fetching edge-tts voices: {e}", exc_info=True)
             self.failed.emit(str(e))

@@ -1,9 +1,9 @@
 """
-СВАЛЯНЕ НА МОДЕЛИ ЗА ПРЕВОД БЕЗ ИНТЕРНЕТ (ARGOS) ОТ НАСТРОЙКИТЕ
+DOWNLOADING OFFLINE TRANSLATION MODELS (ARGOS) FROM THE SETTINGS
 
-Взима индекса на Argos, решава кои двойки трябват за превод "език на
-оригинала -> целеви език" (директно или през английски), сваля липсващите
-(~70 MB всяка) и ги разархивира в папката argos-models до програмата.
+Fetches the Argos index, decides which pairs are needed to translate "source
+language -> target language" (directly or via English), downloads the missing ones
+(~70 MB each) and extracts them into the argos-models folder next to the program.
 """
 
 from utils.imports import QThread, pyqtSignal, requests, tempfile, os, Path
@@ -12,26 +12,26 @@ from core import argos
 
 
 class ArgosDownloadThread(QThread):
-    # двойка ("en → bg"), свалени байтове, общо байтове (-1 = неизвестно)
+    # pair ("en → bg"), bytes downloaded, total bytes (-1 = unknown)
     progress = pyqtSignal(str, int, int)
-    # success, message_key, params - при успех params["name"] са свалените двойки
+    # success, message_key, params - on success params["name"] holds the downloaded pairs
     finished_download = pyqtSignal(bool, str, object)
 
-    # Пазим референция към всяка пусната нишка, докато работи: ако диалогът
-    # с настройките се затвори по време на сваляне, нишката не бива да бъде
-    # унищожена от garbage collector-а ("QThread: Destroyed while running").
-    # Служи и за това нов диалог да знае, че вече тече сваляне.
+    # Keep a reference to every started thread while it runs: if the settings
+    # dialog is closed during a download, the thread must not be
+    # destroyed by the garbage collector ("QThread: Destroyed while running").
+    # Also lets a new dialog know that a download is already in progress.
     _active = []
 
     def __init__(self, source_lang, target_lang):
-        """Езиците са двубуквени ISO кодове ("en", "bg")."""
+        """Languages are two-letter ISO codes ("en", "bg")."""
         super().__init__()
         self.source_lang = source_lang
         self.target_lang = target_lang
 
     @classmethod
     def is_busy(cls):
-        """Има ли сваляне, което още тече (от този или от предишен диалог)."""
+        """Is there a download still running (from this or a previous dialog)?"""
         cls._active[:] = [t for t in cls._active if t.isRunning()]
         return bool(cls._active)
 
@@ -56,7 +56,7 @@ class ArgosDownloadThread(QThread):
         except requests.exceptions.RequestException as e:
             self.finished_download.emit(False, "network_error_detail", {"error": str(e)})
         except Exception as e:
-            logger.error(f"Грешка при сваляне на модел за офлайн превод: {e}", exc_info=True)
+            logger.error(f"Error downloading offline translation model: {e}", exc_info=True)
             self.finished_download.emit(False, "unexpected_error_detail", {"error": str(e)})
 
     def _download(self, pair, url, headers):
@@ -65,7 +65,7 @@ class ArgosDownloadThread(QThread):
         response.raise_for_status()
         total = int(response.headers.get("Content-Length", -1))
         downloaded = 0
-        # Уникално име - две копия на програмата не си пречат.
+        # Unique name - two copies of the program don't interfere with each other.
         fd, name = tempfile.mkstemp(prefix=f"overlingo-argos-{pair[0]}_{pair[1]}-", suffix=".part")
         archive = Path(name)
         try:

@@ -1,14 +1,14 @@
 """
-ЛОКАЛИЗАЦИЯ НА ПОТРЕБИТЕЛСКИЯ ИНТЕРФЕЙС (i18n)
+USER INTERFACE LOCALIZATION (i18n)
 
-Текстовете са САМО в assets/locales/<език>.json - единствен източник.
-(До 2.x имаше и копие на всички текстове тук, в Python, което трябваше да
-се поддържа ръчно в синхрон с JSON файловете.)
+The texts live ONLY in assets/locales/<language>.json - the single source of truth.
+(Up to 2.x there was also a copy of all texts here, in Python, which had to be
+kept in sync with the JSON files by hand.)
 
-Ако файл липсва или е повреден, програмата не се срива: грешката отива в
-app.log, а на мястото на текста се показва английският вариант или,
-ако и него няма, самият ключ (напр. "settings_button_tooltip") - така
-веднага се вижда кой текст липсва.
+If a file is missing or corrupted, the program does not crash: the error goes to
+app.log, and in place of the text the English version is shown or,
+if that is missing too, the key itself (e.g. "settings_button_tooltip") - so
+it's immediately visible which text is missing.
 """
 
 from utils.imports import json, os
@@ -26,9 +26,9 @@ class UiLocalizer:
         self.load_translations()
 
     def load_translations(self):
-        """Зарежда всички .json файлове от папката locales."""
+        """Loads all .json files from the locales folder."""
         if not os.path.isdir(LOCALES_DIR):
-            logger.error(f"Липсва папката с текстове на интерфейса: {LOCALES_DIR}")
+            logger.error(f"UI texts folder is missing: {LOCALES_DIR}")
             return
 
         for file in sorted(os.listdir(LOCALES_DIR)):
@@ -40,20 +40,20 @@ class UiLocalizer:
                     self.translations[lang_code] = json.load(f)
                 self.available_languages.append(lang_code)
             except Exception as e:
-                logger.error(f"Грешка при зареждане на {file}: {e}", exc_info=True)
+                logger.error(f"Error loading {file}: {e}", exc_info=True)
 
         if not self.available_languages:
-            logger.error(f"Няма нито един валиден файл с текстове в {LOCALES_DIR}")
+            logger.error(f"No valid text files found in {LOCALES_DIR}")
 
     def set_language(self, lang_code):
-        """Променя текущия език. Връща False, ако такъв език не е зареден."""
+        """Changes the current language. Returns False if that language is not loaded."""
         if lang_code in self.translations:
             self.current_lang = lang_code
             return True
         return False
 
     def tr(self, key):
-        """Текстът за ключа: от текущия език, после от английския, накрая самият ключ."""
+        """Text for the key: from the current language, then from English, finally the key itself."""
         for lang in (self.current_lang, FALLBACK_LANGUAGE):
             text = self.translations.get(lang, {}).get(key)
             if text is not None:

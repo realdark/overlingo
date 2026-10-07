@@ -45,7 +45,7 @@ class SplitSentencesTest(unittest.TestCase):
         pieces = argos.split_sentences(text)
         self.assertGreater(len(pieces), 1)
         self.assertTrue(all(len(p) <= 300 for p in pieces))
-        self.assertEqual(" ".join(pieces).replace(" ", ""), text.replace(" ", ""))  # нищо не се губи
+        self.assertEqual(" ".join(pieces).replace(" ", ""), text.replace(" ", ""))  # nothing is lost
 
 
 class HelpersTest(unittest.TestCase):
@@ -79,7 +79,7 @@ class HelpersTest(unittest.TestCase):
 
 
 def _fake_package(path, top_folder="translate-en_bg-1_9"):
-    """Архив като истинския .argosmodel: папка с metadata.json, model/model.bin и sentencepiece.model."""
+    """Archive like a real .argosmodel: a folder with metadata.json, model/model.bin and sentencepiece.model."""
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(f"{top_folder}/metadata.json", json.dumps({"from_code": "en", "to_code": "bg"}))
         archive.writestr(f"{top_folder}/model/model.bin", b"\0")
@@ -117,9 +117,9 @@ class InstallTest(unittest.TestCase):
         archive = Path(self.tmp.name) / "en_bg.argosmodel"
         _fake_package(archive)
         argos.install_package(archive, ("en", "bg"), self.models)
-        (self.models / "en_de.tmp").mkdir()  # прекъснато инсталиране
+        (self.models / "en_de.tmp").mkdir()  # interrupted install
         (self.models / "en_de.tmp" / "metadata.json").write_text("{}")
-        (self.models / "en_fr").mkdir()  # само metadata.json, без модел
+        (self.models / "en_fr").mkdir()  # only metadata.json, no model
         (self.models / "en_fr" / "metadata.json").write_text("{}")
         self.assertEqual(argos.installed_pairs(self.models), {("en", "bg")})
 
@@ -130,7 +130,7 @@ class _FakeResult:
 
 
 def _fake_libraries(log):
-    """Фалшиви ctranslate2/sentencepiece: "превеждат" като добавят [двойка] към всяко изречение."""
+    """Fake ctranslate2/sentencepiece: they "translate" by prepending [pair] to each sentence."""
     ct2 = types.ModuleType("ctranslate2")
     sp = types.ModuleType("sentencepiece")
 
@@ -177,7 +177,7 @@ class ArgosTranslatorTest(unittest.TestCase):
         with _fake_libraries(log):
             result = argos.ArgosTranslator("en", self.models).translate("Hello there.\nGood.\n\nBye.", "BG")
         self.assertEqual(result, "[en_bg] Hello there. [en_bg] Good.\n\n[en_bg] Bye.")
-        self.assertEqual(log, [("en_bg", 2), ("en_bg", 1)])  # изреченията на абзац - в една заявка
+        self.assertEqual(log, [("en_bg", 2), ("en_bg", 1)])  # a paragraph's sentences - in a single request
 
     def test_pivot_through_english(self):
         self._install(("de", "en"), ("en", "bg"))
@@ -191,7 +191,7 @@ class ArgosTranslatorTest(unittest.TestCase):
         log = []
         with _fake_libraries(log):
             result = argos.ArgosTranslator("en", self.models).translate("Hello.", "ZH")
-        self.assertEqual(result, "[en_zh] Hello.")  # без "__zh__" в резултата
+        self.assertEqual(result, "[en_zh] Hello.")  # no "__zh__" in the result
 
     def test_missing_model(self):
         with self.assertRaises(argos.ArgosModelMissingError) as ctx:

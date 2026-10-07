@@ -1,16 +1,16 @@
 """
-ЦЕНТРАЛИЗИРАНИ ИМПОРТИ ЗА ЦЕЛИЯ ПРОЕКТ
+CENTRALIZED IMPORTS FOR THE WHOLE PROJECT
 """
 
-# PyQt5 импорти
+# PyQt5 imports
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 
-# Външни библиотеки
+# External libraries
 from pytesseract import Output
 from pathlib import Path
 
-# Външни библиотеки
+# External libraries
 import sys
 import cv2
 import numpy as np

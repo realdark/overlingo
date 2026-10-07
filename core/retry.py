@@ -1,9 +1,9 @@
 """
-RETRY С ЕКСПОНЕНЦИАЛНО ИЗЧАКВАНЕ
+RETRY WITH EXPONENTIAL BACKOFF
 
-Общ helper за временни грешки при превод (rate limit / 429, временен
-проблем на сървъра, timeout). НЕ повтаря опити при грешки, за които
-нов опит е безсмислен (напр. невалиден API ключ) - виж is_retryable_error.
+Shared helper for transient translation errors (rate limit / 429, temporary
+server problem, timeout). Does NOT retry errors for which a new attempt
+is pointless (e.g. an invalid API key) - see is_retryable_error.
 """
 
 import time
@@ -15,10 +15,10 @@ RETRYABLE_HTTP_STATUS = {429, 500, 502, 503, 504}
 
 def is_retryable_error(exc):
     """
-    Евристика: заслужава ли си нов опит за тази грешка.
-    - HTTP 429 / 5xx -> да (rate limit или временен проблем на сървъра)
-    - timeout / connection грешки -> да
-    - всичко друго (напр. невалиден ключ, 4xx различен от 429) -> не
+    Heuristic: is this error worth retrying?
+    - HTTP 429 / 5xx -> yes (rate limit or temporary server problem)
+    - timeout / connection errors -> yes
+    - everything else (e.g. invalid key, 4xx other than 429) -> no
     """
     status = getattr(getattr(exc, "response", None), "status_code", None)
     if status in RETRYABLE_HTTP_STATUS:
@@ -28,7 +28,7 @@ def is_retryable_error(exc):
 
 
 def retry_after_seconds(exc):
-    """Ако сървърът е подал Retry-After хедър, връща стойността му в секунди."""
+    """If the server sent a Retry-After header, returns its value in seconds."""
     response = getattr(exc, "response", None)
     if response is None:
         return None
@@ -43,11 +43,11 @@ def retry_after_seconds(exc):
 
 def retry_with_backoff(func, max_attempts=3, base_delay=1.0, max_delay=8.0, label=""):
     """
-    Изпълнява func() до max_attempts пъти. При грешка, за която
-    is_retryable_error() каже "не си заслужава", спира веднага и я подава
-    нагоре - иначе изчаква (base_delay, base_delay*2, base_delay*4, ...,
-    ограничено до max_delay; или Retry-After, ако сървърът го е подал) и
-    опитва пак.
+    Runs func() up to max_attempts times. On an error that
+    is_retryable_error() deems "not worth it", stops immediately and re-raises
+    it - otherwise waits (base_delay, base_delay*2, base_delay*4, ...,
+    capped at max_delay; or Retry-After, if the server sent one) and
+    tries again.
     """
     delay = base_delay
     prefix = f"[{label}] " if label else ""
@@ -58,12 +58,12 @@ def retry_with_backoff(func, max_attempts=3, base_delay=1.0, max_delay=8.0, labe
         except Exception as e:
             if attempt >= max_attempts or not is_retryable_error(e):
                 if attempt > 1:
-                    logger.error(f"{prefix}Изчерпани опити ({attempt}/{max_attempts}): {e}")
+                    logger.error(f"{prefix}Attempts exhausted ({attempt}/{max_attempts}): {e}")
                 raise
 
             wait = retry_after_seconds(e) or delay
             logger.warning(
-                f"{prefix}Опит {attempt}/{max_attempts} неуспешен ({e}) - нов опит след {wait:.1f}s"
+                f"{prefix}Attempt {attempt}/{max_attempts} failed ({e}) - retrying in {wait:.1f}s"
             )
             time.sleep(min(wait, max_delay))
             delay *= 2

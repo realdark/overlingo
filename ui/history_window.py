@@ -1,9 +1,9 @@
 """
-ПРОЗОРЕЦ С ИСТОРИЯТА НА ПРЕВОДИТЕ
+TRANSLATION HISTORY WINDOW
 
-Показва core.history.TranslationHistory - последните преводи от текущата
-сесия (от екрана и от прозореца за превод на текст). Не е модален - може
-да стои отворен, докато превеждаш, и се опреснява сам при нов превод.
+Shows core.history.TranslationHistory - the latest translations from the current
+session (from the screen and from the text translation window). Non-modal - it can
+stay open while you translate, and refreshes itself on each new translation.
 """
 
 from utils.imports import QtWidgets, QtCore
@@ -20,9 +20,9 @@ def _preview(text, limit=PREVIEW_LEN):
 class HistoryWindow(QtWidgets.QDialog):
     """
     history:            core.history.TranslationHistory
-    on_show:            callback(entry) - "Покажи" (показва превода в панела на лентата)
-    get_audio_settings: callback() -> (глас, скорост)
-    stats:              core.history.SessionStats - ред със статистиката най-отдолу
+    on_show:            callback(entry) - "Show" (shows the translation in the toolbar panel)
+    get_audio_settings: callback() -> (voice, rate)
+    stats:              core.history.SessionStats - statistics row at the bottom
     """
 
     def __init__(self, parent, i18n, history, on_show, get_audio_settings, stats):
@@ -33,13 +33,13 @@ class HistoryWindow(QtWidgets.QDialog):
         self.stats = stats
         self._entries = []
 
-        self.setMinimumSize(540, 360)  # и статистиката вдясно на реда с бутоните
+        self.setMinimumSize(540, 360)  # also fits the statistics to the right of the button row
         layout = QtWidgets.QVBoxLayout(self)
 
         self.empty_label = QtWidgets.QLabel()
         self.empty_label.setAlignment(QtCore.Qt.AlignCenter)
         self.empty_label.setWordWrap(True)
-        layout.addWidget(self.empty_label, stretch=1)  # празна история - надписът заема мястото на списъка
+        layout.addWidget(self.empty_label, stretch=1)  # empty history - the label takes the list's place
 
         self.list_widget = QtWidgets.QListWidget()
         self.list_widget.setWordWrap(True)
@@ -57,8 +57,8 @@ class HistoryWindow(QtWidgets.QDialog):
         buttons.addWidget(self.copy_btn)
         buttons.addWidget(self.audio_btn)
         buttons.addStretch()
-        # Статистиката е вдясно на реда с бутоните - като отделен ред под
-        # тях взимаше част от свободното място на прозореца.
+        # The statistics sit to the right of the button row - as a separate row below
+        # them they took up part of the window's free space.
         self.stats_label = QtWidgets.QLabel()
         self.stats_label.setObjectName("muted_label")
         self.stats_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
@@ -70,7 +70,7 @@ class HistoryWindow(QtWidgets.QDialog):
         self.refresh()
 
     def update_texts(self):
-        """Текстове на интерфейса (вика се и при смяна на езика)."""
+        """UI texts (also called when the language changes)."""
         self.setWindowTitle(self.i18n.tr("history_title"))
         self.empty_label.setText(self.i18n.tr("history_empty"))
         self.show_btn.setText(self.i18n.tr("history_show"))
@@ -85,7 +85,7 @@ class HistoryWindow(QtWidgets.QDialog):
         self.stats_label.setToolTip(self.i18n.tr("history_stats_tooltip"))
 
     def refresh(self):
-        """Презарежда списъка от историята, като пази избрания запис, ако още го има."""
+        """Reloads the list from the history, keeping the selected entry if it still exists."""
         selected = self._selected_entry()
         self._entries = self.history.items()
 
@@ -123,6 +123,6 @@ class HistoryWindow(QtWidgets.QDialog):
             self.on_show(entry)
 
     def hideEvent(self, event):
-        # hideEvent, а не closeEvent - Escape затваря диалога без closeEvent.
+        # hideEvent, not closeEvent - Escape closes the dialog without a closeEvent.
         self.audio_btn.stop()
         super().hideEvent(event)

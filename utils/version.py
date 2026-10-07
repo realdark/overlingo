@@ -1,9 +1,9 @@
 """
-ВЕРСИЯ НА ПРИЛОЖЕНИЕТО - единственото място, където се сменя.
+APPLICATION VERSION - the only place where it is changed.
 
-Чете се от About прозореца (ui/dialogs.py) и от build.sh / build.bat
-(за името на архива). Нарочно е отделен файл без никакви импорти - build
-скриптовете го четат, без да зареждат PyQt5/pygame и останалите библиотеки.
+Read by the About window (ui/dialogs.py) and by build.sh / build.bat
+(for the archive name). Deliberately a separate file with no imports - the
+build scripts read it without loading PyQt5/pygame and the other libraries.
 """
 
 APP_VERSION = "3.3"

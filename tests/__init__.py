@@ -1,14 +1,14 @@
 """
-Тестове за Overlingo.
+Tests for Overlingo.
 
-Пускане (от папката на проекта):
+Run (from the project folder):
 
     python -m unittest discover -s tests -t .
 
-Ако някоя тежка библиотека (PyQt5, pygame, edge_tts, deepl, mss, pynput)
-не е инсталирана, се подменя с празен заместител - виж _stubs.py. Тестовете
-проверяват само логиката, която не зависи от тези библиотеки, така че
-вървят еднакво и с, и без тях.
+If a heavy library (PyQt5, pygame, edge_tts, deepl, mss, pynput) is not
+installed, it is replaced with an empty stub - see _stubs.py. The tests
+only check logic that doesn't depend on these libraries, so they run
+the same with or without them.
 """
 
 import logging
@@ -17,6 +17,6 @@ from tests import _stubs
 
 _stubs.install()
 
-# Тестовете нарочно предизвикват грешки и повторни опити - без това
-# изходът се пълни с очаквани предупреждения, а app.log - с шум.
+# The tests deliberately trigger errors and retries - without this the
+# output fills with expected warnings and app.log with noise.
 logging.disable(logging.CRITICAL)

@@ -1,10 +1,10 @@
 """
-ПРЕВКЛЮЧВАНЕ ПУСНИ/СПРИ ЗА АУДИО ВЪЗПРОИЗВЕЖДАНЕ
+PLAY/STOP TOGGLE FOR AUDIO PLAYBACK
 
-Тази логика (стартирай AudioThread / спри го / смени иконата на бутона)
-се повтаряше идентично в MainWindow.start_play и
-ui.components.SecondaryOverlay.toggle_audio. Извадена е тук веднъж,
-двата класа вече само й подават кой бутон да оцветят.
+This logic (start AudioThread / stop it / change the button icon) was
+duplicated identically in MainWindow.start_play and
+ui.components.SecondaryOverlay.toggle_audio. It is extracted here once;
+both classes now just tell it which button to update.
 """
 
 from core.audio_handler import AudioThread
@@ -12,12 +12,12 @@ from core.audio_handler import AudioThread
 
 class AudioPlaybackToggle:
     """
-    Обвива един AudioThread и превключва play/stop при всяко извикване на toggle().
+    Wraps a single AudioThread and toggles play/stop on each call to toggle().
 
-    set_icon: callback(icon_filename: str), извиква се с "play_button.png"
-              или "stop_button.png" при промяна на състоянието.
-    on_no_internet: опционален callback(), извиква се ако edge-tts не може
-                     да се достигне (услугата е само online).
+    set_icon: callback(icon_filename: str), called with "play_button.png"
+              or "stop_button.png" when the state changes.
+    on_no_internet: optional callback(), called if edge-tts cannot be
+                     reached (the service is online-only).
     """
 
     def __init__(self, set_icon, on_no_internet=None):

@@ -1,9 +1,9 @@
 """
-ГЛАВЕН ПРОЗОРЕЦ НА ПРИЛОЖЕНИЕТО
+MAIN APPLICATION WINDOW
 
-Тук остава само подредбата на UI-а, бутоните и връзките между тях.
-Settings, screenshot+OCR+превод, преводачите и локализацията вече
-живеят в отделни модули (виж core/).
+Only the UI layout, the buttons and the connections between them remain here.
+Settings, screenshot+OCR+translation, the translators and localization now
+live in separate modules (see core/).
 """
 
 from utils.imports import QtWidgets, QtCore, QtGui, QTimer, sys, threading
@@ -35,9 +35,9 @@ class MainWindow(QtWidgets.QWidget):
         super().__init__()
 
         self.set_window_icon()
-        # Не се вижда никъде другаде (прозорецът е frameless, без заглавна
-        # лента), но е важно за taskbar-а/Alt-Tab - особено сега, след
-        # добавянето на "минимизирай" (showMinimized()).
+        # Not shown anywhere else (the window is frameless, with no title
+        # bar), but it matters for the taskbar/Alt-Tab - especially now, after
+        # adding "minimize" (showMinimized()).
         self.setWindowTitle("Overlingo")
         self._tesseract_found = configure_tesseract() is not None
 
@@ -47,7 +47,7 @@ class MainWindow(QtWidgets.QWidget):
 
         self._load_settings_into_fields(self.settings)
 
-        self.stats = SessionStats()  # показва се в прозореца с историята
+        self.stats = SessionStats()  # shown in the history window
         self.translation_cache = TranslationCache()
         self._current_translated_text = None
 
@@ -71,8 +71,8 @@ class MainWindow(QtWidgets.QWidget):
         self.translation_overlay = None
 
         self.history = TranslationHistory()
-        self.history_window = None   # създават се при първото отваряне
-        self._update_thread = None   # проверка за нова версия (менюто "?")
+        self.history_window = None   # created on first open
+        self._update_thread = None   # update check (the "?" menu)
         self.text_window = None
 
         self.setup_ui()
@@ -82,24 +82,24 @@ class MainWindow(QtWidgets.QWidget):
         self.refresh_timer.setInterval(self.refresh_interval_ms)
         self.refresh_timer.timeout.connect(self.translate_selection)
 
-        # Глобален hotkey - Windows и Linux/X11 (виж core/hotkey_manager.py
-        # за причините Wayland/macOS да останат изключени засега).
+        # Global hotkey - Windows and Linux/X11 (see core/hotkey_manager.py
+        # for why Wayland/macOS stay disabled for now).
         self.hotkey_manager = HotkeyManager(self)
         self.hotkey_manager.triggered.connect(self._on_hotkey_triggered)
         self.hotkey_manager.failed.connect(self._on_hotkey_failed)
         self._reconfigure_hotkey()
 
-        # "Загрява" mss във фонова нишка - иначе първото реално маркиране
-        # (start_selection, синхронно в главната нишка) замръзва за 1-2s
-        # заради еднократната инициализация на mss (виж core/capture.py).
+        # "Warm up" mss in a background thread - otherwise the first real selection
+        # (start_selection, synchronous on the main thread) freezes for 1-2s
+        # due to mss's one-time initialization (see core/capture.py).
         threading.Thread(target=warm_up, daemon=True).start()
 
-        # Отложено (не веднага) - за да се появи диалогът СЛЕД като главният
-        # прозорец вече се вижда, не преди/по средата на construct-ването му.
+        # Deferred (not immediate) - so the dialog appears AFTER the main
+        # window is already visible, not before/in the middle of constructing it.
         QtCore.QTimer.singleShot(300, self._show_tesseract_missing_warning)
 
     def _load_settings_into_fields(self, settings):
-        """Разопакова речника с настройки в атрибути на прозореца."""
+        """Unpacks the settings dict into window attributes."""
         self.text_size = settings["text_size"]
         self.font_color = settings["font_color"]
         self.overlay_opacity = settings["overlay_opacity"]
@@ -120,7 +120,7 @@ class MainWindow(QtWidgets.QWidget):
         self.translation_timeout = settings["translation_timeout"]
 
     def _reconfigure_translator(self):
-        """Пресъздава преводача според текущите настройки и го подава на контролера."""
+        """Recreates the translator from the current settings and hands it to the controller."""
         translator = create_translator(
             self.translation_api, self.translation_api_key,
             source_lang=argos.source_language(self.ocr_lang),
@@ -128,11 +128,11 @@ class MainWindow(QtWidgets.QWidget):
         self.translation_controller.configure(translator, self.ocr_lang, self.target_lang)
 
     # ------------------------------------------------------------------
-    # UI подредба
+    # UI layout
     # ------------------------------------------------------------------
 
     def setup_ui(self):
-        """Настройка на потребителския интерфейс"""
+        """User interface setup"""
         base_flags = QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint
         self.fullscreen_detector.apply_window_flags(self, base_flags)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
@@ -142,7 +142,7 @@ class MainWindow(QtWidgets.QWidget):
         screen = QtWidgets.QApplication.primaryScreen().geometry()
         window_width, window_height = 800, 200
         self._full_window_height = window_height
-        self._toolbar_only_height = 55  # само лентата с бутони, без overlay панела
+        self._toolbar_only_height = 55  # just the button toolbar, without the overlay panel
         x, y = (screen.width() - window_width) // 2, screen.height() - window_height - 10
 
         if self.settings.get("window_pos"):
@@ -157,11 +157,11 @@ class MainWindow(QtWidgets.QWidget):
 
     def setup_buttons_background(self):
         """
-        Заоблен полупрозрачен фон за лентата с бутони - и същевременно
-        зоната, върху която можеш да задържиш и местиш цялата програма
-        (виж WindowDragFilter). Бутоните се създават след това и лягат
-        отгоре й (bg_widget.lower()), така че кликовете върху тях си
-        работят нормално - местенето хваща само празното пространство.
+        Rounded semi-transparent background for the button toolbar - and at the same time
+        the area you can press and drag to move the whole app
+        (see WindowDragFilter). The buttons are created afterwards and lie
+        on top of it (bg_widget.lower()), so clicks on them
+        work normally - dragging only catches the empty space.
         """
         self.bg_widget = QtWidgets.QWidget(self)
         self.bg_widget.setGeometry(10, 5, 780, 40)
@@ -178,7 +178,7 @@ class MainWindow(QtWidgets.QWidget):
         self.bg_widget.installEventFilter(self._drag_filter)
 
     def setup_connections(self):
-        """Свързва сигналите със слотовете"""
+        """Connects signals to slots"""
         self.mark_translate_btn.clicked.connect(self.mark_and_translate)
         self.retranslate_btn.clicked.connect(self.translate_selection)
         self.clear_btn.clicked.connect(self.clear_overlay)
@@ -195,16 +195,16 @@ class MainWindow(QtWidgets.QWidget):
 
     def _position_translation_status(self):
         """
-        Спинърът стои в бутона "Маркирай и преведи", на малко разстояние
-        след текста (не залепен за ръба - текстът е центриран и тогава
-        почти го докосваше). Вика се и при смяна на езика, защото
-        дължината на текста е различна.
+        The spinner sits inside the "Select and translate" button, a short distance
+        after the text (not stuck to the edge - the text is centered and then
+        it almost touched it). Also called when the language changes, because
+        the text length differs.
         """
         icon_size = 22
         gap_after_text = 10
         btn = self.mark_translate_btn
         btn_geo = btn.geometry()
-        btn.ensurePolished()  # размерът на шрифта идва от theme.qss
+        btn.ensurePolished()  # the font size comes from theme.qss
         text_width = QtGui.QFontMetrics(btn.font()).horizontalAdvance(btn.text())
         text_right = btn_geo.center().x() + text_width // 2
         x = min(text_right + gap_after_text, btn_geo.right() - icon_size - 2)
@@ -214,27 +214,27 @@ class MainWindow(QtWidgets.QWidget):
 
     def setup_buttons(self):
         """
-        Създава и позиционира бутоните. Лявата страна е в три групи с малко
-        по-голямо разстояние между тях:
-          превод от екрана:  [Маркирай и преведи] [⟳] [Изчисти] [▶]
-          други начини:      [Aa] [история]
-          изглед:            [око]
-        Вдясно: [?] (помощ / за програмата), настройки, минимизиране, изход.
+        Creates and positions the buttons. The left side is in three groups with slightly
+        larger spacing between them:
+          screen translation: [Select and translate] [⟳] [Clear] [▶]
+          other ways:         [Aa] [history]
+          view:               [eye]
+        On the right: [?] (help / about), settings, minimize, exit.
         """
         y, h = 10, 30
         gap, group_gap = 15, 30
         x = self.bg_widget.x() + 5
 
-        # --- превод от екрана ---
+        # --- screen translation ---
         self.mark_translate_btn = QtWidgets.QPushButton(self)
         self.mark_translate_btn.setObjectName("primary_btn")
-        self.mark_translate_btn.setGeometry(x, y, 230, h)  # място и за спинъра след текста
+        self.mark_translate_btn.setGeometry(x, y, 230, h)  # room for the spinner after the text too
         x += 230 + gap
 
         self.retranslate_btn = self._make_icon_button(
             "retranslate_button_white.png", x, object_name="secondary_icon_btn"
         )
-        self.retranslate_btn.setEnabled(False)  # докато няма маркирана област
+        self.retranslate_btn.setEnabled(False)  # until an area has been selected
         x += h + gap
 
         self.clear_btn = QtWidgets.QPushButton(self)
@@ -245,10 +245,10 @@ class MainWindow(QtWidgets.QWidget):
         self.play_btn = self._make_icon_button(
             "play_button_white.png", x, width=40, object_name="secondary_icon_btn"
         )
-        self.play_btn.setEnabled(False)  # активен едва когато има превод за прочитане
+        self.play_btn.setEnabled(False)  # enabled only once there is a translation to read
         x += 40 + group_gap
 
-        # --- други начини за превод ---
+        # --- other ways to translate ---
         self.text_translate_btn = self._make_icon_button(
             "text_translate_button_white.png", x, object_name="secondary_icon_btn"
         )
@@ -258,19 +258,19 @@ class MainWindow(QtWidgets.QWidget):
         )
         x += h + group_gap
 
-        # --- изглед ---
+        # --- view ---
         self.toggle_overlay_btn = self._make_icon_button(
             "show_button_white.png", x, object_name="secondary_icon_btn"
         )
 
         self.translation_status = QtWidgets.QLabel(self)
         self.translation_status.setAlignment(QtCore.Qt.AlignCenter)
-        # Лежи върху бутона за превод - без това кликовете точно върху
-        # спинъра не биха стигали до бутона отдолу.
+        # Lies over the translate button - without this, clicks right on
+        # the spinner wouldn't reach the button underneath.
         self.translation_status.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
-        self.translation_status.hide()  # вижда се само докато тече превод
+        self.translation_status.hide()  # visible only while a translation is running
 
-        # Бяла версия на spinner.png - контрастира добре на синия бутон.
+        # White version of spinner.png - contrasts well with the blue button.
         self.status_icon = QtGui.QPixmap(image_path("spinner_white.png"))
         self.scaled_icon = self.status_icon.scaled(18, 18, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
         self.translation_status.setPixmap(self.scaled_icon)
@@ -282,7 +282,7 @@ class MainWindow(QtWidgets.QWidget):
         self.animation.setLoopCount(-1)
         self.animation.valueChanged.connect(self.rotate_icon)
 
-        # --- вдясно, отдясно наляво ---
+        # --- right side, right to left ---
         step = 35
         right_x = self.bg_widget.x() + self.bg_widget.width() - 35
         self.exit_btn = self._make_icon_button("close_button_white.png", right_x)
@@ -292,8 +292,8 @@ class MainWindow(QtWidgets.QWidget):
         self.settings_btn = self._make_icon_button("settings_button_white.png", right_x)
         right_x -= step
 
-        # "Помощ" и "За програмата" са в едно меню - по-рядко се ползват,
-        # а така освобождаваме място за новите бутони вляво.
+        # "Help" and "About" share one menu - they are used less often,
+        # and this frees up room for the new buttons on the left.
         self.help_btn = self._make_icon_button("help_button_white.png", right_x)
         self.help_btn.setObjectName("menu_icon_btn")
         self.help_menu = QtWidgets.QMenu(self)
@@ -307,9 +307,9 @@ class MainWindow(QtWidgets.QWidget):
 
     def _make_icon_button(self, icon_file, x, width=None, object_name=None):
         """
-        Помощна функция: замества повтарящия се код за създаване на иконен
-        бутон 30x30. width (по-широк бутон) и object_name покриват и
-        нестандартните случаи (напр. play_btn - по-широк, със сив бокс стил).
+        Helper: replaces the repeated code for creating a 30x30 icon
+        button. width (wider button) and object_name also cover
+        non-standard cases (e.g. play_btn - wider, with a gray box style).
         """
         btn = QtWidgets.QToolButton(self)
         btn.setGeometry(x, 10, width or 30, 30)
@@ -328,7 +328,7 @@ class MainWindow(QtWidgets.QWidget):
         self.text_display.setGeometry(0, 0, self.overlay_panel.width(), self.overlay_panel.height())
         self.text_display.setReadOnly(True)
         self.text_display.setFrameStyle(QtWidgets.QFrame.NoFrame)
-        # "Изчисти" е активен само когато има нещо за изчистване
+        # "Clear" is enabled only when there is something to clear
         self.text_display.textChanged.connect(self._update_clear_button)
         self._update_clear_button()
 
@@ -344,7 +344,7 @@ class MainWindow(QtWidgets.QWidget):
         )
 
     def update_ui_texts(self):
-        """Текстовете на лентата (при старт и при смяна на езика)."""
+        """The toolbar texts (at startup and when the language changes)."""
         t = self.i18n.tr
         self.mark_translate_btn.setText(t("mark_translate_button"))
         self._position_translation_status()
@@ -367,7 +367,7 @@ class MainWindow(QtWidgets.QWidget):
                 window.update_texts()
 
     def _update_hotkey_tooltips(self):
-        """Подсказките на двата бутона за превод показват и hotkey-я, ако е включен."""
+        """The tooltips of both translate buttons also show the hotkey, if enabled."""
         hotkeys_on = HOTKEY_SUPPORTED and self.hotkey_enabled
 
         def with_hotkey(text, combo):
@@ -379,19 +379,19 @@ class MainWindow(QtWidgets.QWidget):
             with_hotkey(self.i18n.tr("retranslate_tooltip"), self.hotkey_retranslate_combo))
 
     def toggle_overlay_visibility(self):
-        """Превключва видимостта на overlay панела (бутонът с окото)"""
+        """Toggles the overlay panel's visibility (the eye button)"""
         self._set_overlay_panel_visible(not self.overlay_panel.isVisible())
 
     def _set_overlay_panel_visible(self, visible):
         """
-        Показва/скрива overlay панела И оразмерява самия прозорец.
+        Shows/hides the overlay panel AND resizes the window itself.
 
-        Панелът е дете на главния прозорец - само да го скрием (hide) не
-        стига, защото прозорецът (frameless, always-on-top) пак заема
-        пълната си височина и продължава да "лови" кликовете над
-        програмите под него, дори когато нищо не се вижда там. Свиваме
-        прозореца до височината само на лентата с бутони, когато панелът
-        е скрит, и го връщаме, когато е показан.
+        The panel is a child of the main window - just hiding it is not
+        enough, because the window (frameless, always-on-top) still takes up
+        its full height and keeps "catching" clicks over the
+        programs beneath it, even when nothing is visible there. We shrink
+        the window to the height of the button toolbar alone when the panel
+        is hidden, and restore it when the panel is shown.
         """
         if visible:
             self.overlay_panel.show()
@@ -419,19 +419,19 @@ class MainWindow(QtWidgets.QWidget):
             self.translation_status.hide()
 
     def mark_and_translate(self):
-        """Маркиране и превод наведнъж"""
+        """Select and translate in one go"""
         self.start_selection(callback=self.on_selection_complete_for_translate)
 
     def on_selection_complete_for_translate(self, rect):
-        # Затваряме предишния overlay веднага - иначе стои с текста от
-        # предния превод, докато чакаме новия OCR+превод (или, ако новата
-        # област е другаде на екрана, изобщо не се мести натам).
+        # Close the previous overlay immediately - otherwise it stays with the text of
+        # the previous translation while we wait for the new OCR+translation (or, if the new
+        # area is elsewhere on the screen, it doesn't move there at all).
         self._close_translation_overlay()
         self.save_selection(rect)
         QtCore.QTimer.singleShot(100, self.translate_selection)
 
     def _close_translation_overlay(self):
-        """Затваря текущия overlay (ако има) веднага, а не чак след като новият превод е готов."""
+        """Closes the current overlay (if any) right away, not only once the new translation is ready."""
         if self.translation_overlay:
             self.translation_overlay.close()
 
@@ -443,9 +443,9 @@ class MainWindow(QtWidgets.QWidget):
 
     def check_for_updates(self):
         """
-        "Провери за нова версия" от менюто "?". Заявката към GitHub е във
-        фонова нишка; докато тече, редът в менюто е неактивен, за да не се
-        пуснат две проверки едновременно.
+        "Check for updates" from the "?" menu. The request to GitHub runs in a
+        background thread; while it runs, the menu item is disabled so that
+        two checks can't be started at once.
         """
         if self._update_thread and self._update_thread.isRunning():
             return
@@ -459,11 +459,11 @@ class MainWindow(QtWidgets.QWidget):
         show_update_result(self, self.i18n, result)
 
     # ------------------------------------------------------------------
-    # Настройки
+    # Settings
     # ------------------------------------------------------------------
 
     def show_settings(self):
-        """Показва диалога с настройки (виж ui/settings_dialog.py)"""
+        """Shows the settings dialog (see ui/settings_dialog.py)"""
         dialog = SettingsDialog(
             self,
             self.settings_manager,
@@ -475,11 +475,11 @@ class MainWindow(QtWidgets.QWidget):
         dialog.exec_()
 
     def _preview_opacity(self, value):
-        """Реагира на плъзгача за прозрачност веднага, преди да е натиснат Запази."""
+        """Reacts to the opacity slider immediately, before Save is pressed."""
         self.overlay_panel.set_alpha(value)
 
     def _collect_current_settings(self):
-        """Текущото състояние на прозореца, представено като dict (за SettingsDialog)."""
+        """The current window state as a dict (for SettingsDialog)."""
         return {
             "text_size": self.text_size,
             "font_color": self.font_color,
@@ -502,10 +502,10 @@ class MainWindow(QtWidgets.QWidget):
         }
 
     def apply_settings(self, settings):
-        """Прилага вече валидирани настройки (извиква се от SettingsDialog.on_save)."""
+        """Applies already validated settings (called from SettingsDialog.on_save)."""
         self._load_settings_into_fields(settings)
-        # Отметката "Автоматичен превод" не е в диалога с настройки, но
-        # "Възстанови по подразбиране" трябва да я върне и нея.
+        # The "Auto translate" checkbox isn't in the settings dialog, but
+        # "Restore defaults" must reset it too.
         if "text_auto_translate" in settings:
             self.settings["text_auto_translate"] = settings["text_auto_translate"]
             if self.text_window:
@@ -535,7 +535,7 @@ class MainWindow(QtWidgets.QWidget):
         self.save_settings_to_file()
 
     def save_settings_to_file(self):
-        """Запазва текущите настройки във файл чрез SettingsManager."""
+        """Saves the current settings to file via SettingsManager."""
         self.settings.update(self._collect_current_settings())
         self.settings["window_pos"] = [self.x(), self.y()]
         self.settings["interface_language"] = self.i18n.current_lang
@@ -545,13 +545,13 @@ class MainWindow(QtWidgets.QWidget):
         self._set_overlay_panel_visible(not self.hide_overlay_enabled)
 
     # ------------------------------------------------------------------
-    # Маркиране на област
+    # Area selection
     # ------------------------------------------------------------------
 
     def start_selection(self, callback):
-        """Стартира процеса на маркиране на област от екрана."""
+        """Starts selecting an area of the screen."""
         if self.selection_window and self.selection_window.isVisible():
-            return  # вече се маркира (напр. hotkey-ят е натиснат два пъти)
+            return  # already selecting (e.g. the hotkey was pressed twice)
         screenshot_qt = capture_full_screen_qimage()
         self.selection_window = SelectionWindow(screenshot_qt, hint_text=self.i18n.tr("selection_hint"))
         self.selection_window.selection_made.connect(callback)
@@ -566,23 +566,23 @@ class MainWindow(QtWidgets.QWidget):
         )
 
     # ------------------------------------------------------------------
-    # Аудио
+    # Audio
     # ------------------------------------------------------------------
 
     def _set_play_button_icon(self, icon_filename):
-        # play_button.png/stop_button.png са черни - на плътния сив фон на
-        # play бутона (secondary_icon_btn) искаме бялата версия, за да
-        # пасва на останалите икони в лентата.
+        # play_button.png/stop_button.png are black - on the solid gray background of
+        # the play button (secondary_icon_btn) we want the white version so it
+        # matches the other toolbar icons.
         white_filename = icon_filename.replace(".png", "_white.png")
         self.play_btn.setIcon(QtGui.QIcon(image_path(white_filename)))
 
     def _set_current_translation(self, text):
-        """Запомня последния превод и активира/деактивира play бутона спрямо него."""
+        """Remembers the last translation and enables/disables the play button accordingly."""
         self._current_translated_text = text or None
         self.play_btn.setEnabled(bool(self._current_translated_text))
 
     def _on_audio_no_internet(self):
-        """edge-tts е онлайн услуга - без връзка озвучаването не може да проработи."""
+        """edge-tts is an online service - text-to-speech cannot work without a connection."""
         self.text_display.append(f"❌ {self.i18n.tr('audio_requires_internet')}\n")
 
     def start_play(self):
@@ -592,11 +592,11 @@ class MainWindow(QtWidgets.QWidget):
         self.audio.toggle(self._current_translated_text, self.audio_lang, self.audio_speed)
 
     # ------------------------------------------------------------------
-    # Превод (делегирано на TranslationController - виж core/translation_controller.py)
+    # Translation (delegated to TranslationController - see core/translation_controller.py)
     # ------------------------------------------------------------------
 
     def translate_selection(self):
-        """Стартира превод на маркираната област."""
+        """Starts translating the selected area."""
         if not self.selection_rect:
             self.text_display.append(f"❌ {self.i18n.tr('no_area_selected')}\n")
             return
@@ -613,13 +613,13 @@ class MainWindow(QtWidgets.QWidget):
             if self.translation_overlay.geometry().intersects(self.selection_rect):
                 self._overlay_pending_reshow = True
                 self.translation_overlay.hide()
-                # .hide() само маркира прозореца за скриване - реалното
-                # изчезване от екрана (прозоречният мениджър/compositor-ът)
-                # отнема частица от секундата. processEvents() разчиства
-                # само Qt-вата опашка, но не гарантира, че compositor-ът
-                # реално е дорисувал екрана без overlay-я - затова и кратко
-                # (неблокиращо, през event loop-а) изчакване след него,
-                # преди screenshot-ът да бъде направен.
+                # .hide() only marks the window to be hidden - actually
+                # disappearing from the screen (window manager/compositor)
+                # takes a fraction of a second. processEvents() only flushes
+                # Qt's queue, but doesn't guarantee the compositor has
+                # actually redrawn the screen without the overlay - hence the short
+                # (non-blocking, via the event loop) wait after it,
+                # before the screenshot is taken.
                 QtWidgets.QApplication.processEvents()
                 QtCore.QTimer.singleShot(80, self._capture_and_translate)
                 return
@@ -627,9 +627,9 @@ class MainWindow(QtWidgets.QWidget):
         self._capture_and_translate()
 
     def _capture_and_translate(self):
-        # Размерът на шрифта трябва само за нов overlay - при авто-рефреш и
-        # "Преведи отново" върху вече отворен overlay второто OCR минаване
-        # би било излишно.
+        # The font size is needed only for a new overlay - on auto-refresh and
+        # "Translate again" over an already open overlay a second OCR pass
+        # would be redundant.
         detect_font_size = (
             self.preserve_font_size and self.overlay_translation_enabled and self.translation_overlay is None
         )
@@ -637,17 +637,17 @@ class MainWindow(QtWidgets.QWidget):
 
     def _reshow_overlay_if_pending(self):
         """
-        Показва обратно overlay-я, ако сме го скрили за текущия цикъл.
-        Извиква се веднага след screenshot-а (capture_finished) и при
-        грешка/timeout - никога не се чака целият OCR+превод да завърши,
-        за да не виси overlay-ят скрит с секунди без нужда.
+        Shows the overlay again if we hid it for the current cycle.
+        Called right after the screenshot (capture_finished) and on
+        error/timeout - never waits for the whole OCR+translation to finish,
+        so the overlay doesn't stay hidden for seconds for no reason.
         """
         if self._overlay_pending_reshow and self.translation_overlay:
             self.translation_overlay.show()
         self._overlay_pending_reshow = False
 
     def _on_capture_finished(self):
-        """Screenshot-ът е готов - overlay-ят вече може да се покаже обратно, без да чакаме превода."""
+        """The screenshot is ready - the overlay can be shown again without waiting for the translation."""
         self._reshow_overlay_if_pending()
 
     def _on_translation_failed(self, error_key, detail, source_text):
@@ -659,10 +659,10 @@ class MainWindow(QtWidgets.QWidget):
         message = f"❌ {self.i18n.tr(error_key)}"
         self.text_display.append(f"{message}: {detail}\n" if detail else f"{message}\n")
         if error_key == "translation_timeout":
-            # Отделен видим pop-up само за timeout - за разлика от
-            # останалите грешки, тук потребителят вероятно иска да знае
-            # веднага (не само ред в текстовия панел), защото решението
-            # обикновено е "увеличи timeout-а в Settings", не просто "пробвай пак".
+            # A separate visible pop-up only for timeouts - unlike
+            # the other errors, here the user probably wants to know
+            # right away (not just a line in the text panel), because the fix
+            # is usually "increase the timeout in Settings", not just "try again".
             QtWidgets.QMessageBox.warning(
                 self, self.i18n.tr("warning_title"), self.i18n.tr("translation_timeout")
             )
@@ -670,7 +670,7 @@ class MainWindow(QtWidgets.QWidget):
 
     def _on_translation_finished(self, source_text, translated_text, from_cache, fallback_used,
                                   font_size, rect):
-        """Обработва завършването на превода (сигнал от TranslationController)."""
+        """Handles translation completion (signal from TranslationController)."""
         self.set_translation_status(False)
         self._refresh_in_progress = False
 
@@ -692,8 +692,8 @@ class MainWindow(QtWidgets.QWidget):
         self._maybe_start_refresh()
 
     def _show_or_update_overlay(self, translated_text, font_size, rect):
-        # font_size е измерен във фоновата нишка (виж _capture_and_translate);
-        # 0 - не е мерен (размерът на шрифта не се пази, или overlay-ят вече е отворен).
+        # font_size was measured in the background thread (see _capture_and_translate);
+        # 0 - not measured (font size isn't preserved, or the overlay is already open).
         overlay_font_size = font_size or self.text_size
 
         if self.translation_overlay is None:
@@ -716,10 +716,10 @@ class MainWindow(QtWidgets.QWidget):
         self.refresh_timer.stop()
         self.translation_overlay = None
         self._update_clear_button()
-        # НЕ викаме self.show() тук - ако потребителят сам е минимизирал
-        # главния прозорец (или overlay-ят се появи, докато той вече беше
-        # минимизиран), затварянето на overlay-я не бива насила да го
-        # възстановява. Минимизирано състояние се сменя само ръчно.
+        # Do NOT call self.show() here - if the user minimized
+        # the main window themselves (or the overlay appeared while it was already
+        # minimized), closing the overlay must not force it to
+        # restore. The minimized state only changes manually.
 
     def _maybe_start_refresh(self):
         should_refresh = (
@@ -735,16 +735,16 @@ class MainWindow(QtWidgets.QWidget):
     def clear_overlay(self):
         self.selection_rect = None
         self.retranslate_btn.setEnabled(False)
-        self.audio.stop()  # няма какво да се чете повече
+        self.audio.stop()  # nothing left to read
         self._set_current_translation(None)
         self.text_display.clear()
         self.refresh_timer.stop()
         self.translation_cache.clear()
-        self._close_translation_overlay()  # ако има активен overlay - "Изчистване" значи всичко
+        self._close_translation_overlay()  # if there is an active overlay - "Clear" means everything
         self._update_clear_button()
 
     def _update_clear_button(self):
-        """Активен, ако има текст в панела, маркирана област или отворен overlay."""
+        """Enabled if there is text in the panel, a selected area or an open overlay."""
         has_something = bool(
             self.text_display.toPlainText().strip()
             or self.selection_rect
@@ -753,25 +753,25 @@ class MainWindow(QtWidgets.QWidget):
         self.clear_btn.setEnabled(has_something)
 
     # ------------------------------------------------------------------
-    # Глобален hotkey (Windows и Linux/X11)
+    # Global hotkey (Windows and Linux/X11)
     # ------------------------------------------------------------------
 
     def _minimize_window(self):
-        """Обикновено минимизиране в taskbar-а - вика се от minimize_btn."""
+        """Plain minimize to the taskbar - called from minimize_btn."""
         self.showMinimized()
 
     def _restore_window(self):
-        """Връща прозореца от минимизирано състояние (taskbar) - вика се от hotkey-я."""
+        """Restores the window from the minimized state (taskbar) - called from the hotkey."""
         self.showNormal()
         self.raise_()
         self.activateWindow()
 
     def bring_to_front(self):
-        """Второ стартиране на програмата показва вече отворената (виж core/single_instance.py)."""
+        """Launching the app a second time shows the already open one (see core/single_instance.py)."""
         self._restore_window()
 
     def _reconfigure_hotkey(self):
-        """Пуска/спира глобалните hotkey-и според текущите настройки (Windows/Linux X11)."""
+        """Starts/stops the global hotkeys per the current settings (Windows/Linux X11)."""
         if HOTKEY_SUPPORTED and self.hotkey_enabled and self.hotkey_combo:
             self.hotkey_manager.start({
                 ACTION_MARK_TRANSLATE: self.hotkey_combo,
@@ -783,10 +783,10 @@ class MainWindow(QtWidgets.QWidget):
 
     def _on_hotkey_triggered(self, action):
         """
-        Показваме прозореца обратно САМО ако overlay display е изключен -
-        иначе резултатът и без друго излиза директно върху текста
-        (SecondaryOverlay), а не в самия прозорец - връщането му тук би
-        добавило само ненужно мигване.
+        We show the window again ONLY if overlay display is off -
+        otherwise the result appears directly over the text anyway
+        (SecondaryOverlay), not in the window itself - bringing it back here would
+        only add a pointless flicker.
         """
         if not self.overlay_translation_enabled:
             self._restore_window()
@@ -797,17 +797,17 @@ class MainWindow(QtWidgets.QWidget):
 
     def _on_hotkey_failed(self, error):
         """
-        Видимо съобщение, а не само запис в лога - иначе hotkey-ят просто
-        "не работи" без обяснение. Отложено, защото може да дойде още
-        докато прозорецът се създава.
+        A visible message, not just a log entry - otherwise the hotkey simply
+        "doesn't work" with no explanation. Deferred, because it may arrive while
+        the window is still being created.
         """
-        logger.warning(f"Hotkey не можа да се активира: {error}")
+        logger.warning(f"Hotkey could not be activated: {error}")
         QtCore.QTimer.singleShot(0, lambda: QtWidgets.QMessageBox.warning(
             self, self.i18n.tr("warning_title"), f"{self.i18n.tr('hotkey_failed')}\n\n{error}"
         ))
 
     # ------------------------------------------------------------------
-    # История и превод на текст
+    # History and text translation
     # ------------------------------------------------------------------
 
     def _add_to_history(self, source, translation):
@@ -816,7 +816,7 @@ class MainWindow(QtWidgets.QWidget):
             self.history_window.refresh()
 
     def _on_text_translated(self, source, translation, from_cache):
-        """Превод от прозореца "Превод на текст" - брои се и влиза в историята."""
+        """Translation from the "Translate text" window - counted and added to the history."""
         self.stats.record(from_cache)
         self._add_to_history(source, translation)
 
@@ -837,7 +837,7 @@ class MainWindow(QtWidgets.QWidget):
         self.history_window.activateWindow()
 
     def _show_history_entry(self, entry):
-        """"Покажи" от историята - преводът излиза в текстовия панел на лентата."""
+        """"Show" from the history - the translation appears in the toolbar's text panel."""
         self._restore_window()
         self._set_overlay_panel_visible(True)
         self.text_display.append(self.i18n.tr("detected_text"))
@@ -869,11 +869,11 @@ class MainWindow(QtWidgets.QWidget):
         self.settings["text_window_geometry"] = geometry
 
     # ------------------------------------------------------------------
-    # Стартиране / затваряне
+    # Startup / shutdown
     # ------------------------------------------------------------------
 
     def set_window_icon(self):
-        """Автоматично зарежда правилната икона за всяка OS"""
+        """Automatically loads the right icon for each OS"""
         try:
             from utils.config import APP_ICON_WINDOWS, APP_ICON_MAC, APP_ICON_LINUX
 
@@ -888,32 +888,32 @@ class MainWindow(QtWidgets.QWidget):
 
             if icon_path.exists():
                 self.setWindowIcon(QtGui.QIcon(str(icon_path)))
-                logger.info(f"{platform_name} икона заредена: {icon_path}")
+                logger.info(f"{platform_name} icon loaded: {icon_path}")
             else:
-                logger.warning(f"{platform_name} икона не е намерена: {icon_path}")
+                logger.warning(f"{platform_name} icon not found: {icon_path}")
         except Exception as e:
-            logger.error(f"Грешка при зареждане на икона: {e}", exc_info=True)
+            logger.error(f"Error loading icon: {e}", exc_info=True)
 
     def _show_tesseract_missing_warning(self):
         """
-        Видим диалог (не само лог) - иначе потребителят просто вижда, че
-        OCR-ът "не работи", без ясна причина. Отложено от __init__, за да
-        се появи след като главният прозорец вече се вижда.
+        A visible dialog (not just a log) - otherwise the user just sees that
+        OCR "doesn't work", with no clear reason. Deferred from __init__ so that it
+        appears after the main window is already visible.
         """
         if not self._tesseract_found:
             self._tesseract_found = show_tesseract_missing(self, self.i18n)
 
     def closeEvent(self, event):
-        # Прозорецът за текст пръв - при скриване записва размера си в
-        # self.settings, който се запазва на следващия ред.
+        # The text window goes first - on hide it writes its size into
+        # self.settings, which is saved on the next line.
         if self.text_window:
             self.text_window.close()
             self.text_window.wait_for_threads()
         if self.history_window:
             self.history_window.close()
         if self._update_thread:
-            self._update_thread.wait(3000)  # нишка, унищожена докато работи, срива Qt при изход
+            self._update_thread.wait(3000)  # a thread destroyed while running crashes Qt on exit
         self.save_settings_to_file()
         self.hotkey_manager.stop()
-        self._close_translation_overlay()  # иначе остава "осиротял" на екрана след затваряне
+        self._close_translation_overlay()  # otherwise it is left "orphaned" on screen after closing
         super().closeEvent(event)

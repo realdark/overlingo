@@ -1,23 +1,23 @@
 """
-КОНФИГУРАЦИЯ НА ПРОЕКТА
+PROJECT CONFIGURATION
 """
 
 from utils.imports import Path, sys, os
 
 def get_base_dir():
-    """Връща правилната базова директория за компилирани и некомпилирани версии"""
+    """Returns the correct base directory for compiled and non-compiled versions"""
     if getattr(sys, 'frozen', False):
-        # Компилирана версия - използваме папката на exe файла
+        # Compiled version - use the exe file's folder
         return Path(sys.executable).parent
     else:
-        # Некомпилирана версия - използваме нормалния път
+        # Non-compiled version - use the normal path
         return Path(__file__).resolve().parent.parent
 
 def get_resource_dir():
     """
-    Папката, в която е "assets". Обикновено до програмата (build.sh/build.bat
-    я копират там). В macOS .app пакета е вътре в пакета (PyInstaller я
-    слага там с --add-data) - намира се през sys._MEIPASS.
+    The folder containing "assets". Usually next to the program (build.sh/build.bat
+    copy it there). In the macOS .app bundle it is inside the bundle (PyInstaller
+    puts it there with --add-data) - found via sys._MEIPASS.
     """
     base = get_base_dir()
     if (base / "assets").is_dir():
@@ -30,11 +30,11 @@ def get_resource_dir():
 
 def get_data_dir():
     """
-    Къде се пишат настройките, логовете и моделите за превод без интернет.
-    До програмата (така е и досега на Windows/Linux - всичко е в една папка).
-    Изключение: компилираната версия за macOS - .app пакетът не бива да се
-    променя (често е в /Applications без права за запис, а и подписът му се
-    чупи), затова там е ~/Library/Application Support/Overlingo.
+    Where settings, logs and offline translation models are written.
+    Next to the program (as it has always been on Windows/Linux - everything in one folder).
+    Exception: the compiled macOS version - the .app bundle must not be
+    modified (it is often in /Applications without write permission, and its
+    signature breaks), so there it is ~/Library/Application Support/Overlingo.
     """
     if getattr(sys, "frozen", False) and sys.platform == "darwin":
         data = Path.home() / "Library" / "Application Support" / "Overlingo"
@@ -46,7 +46,7 @@ def get_data_dir():
     return get_base_dir()
 
 
-# Динамични пътища
+# Dynamic paths
 BASE_DIR = get_base_dir()
 RESOURCE_DIR = get_resource_dir()
 DATA_DIR = get_data_dir()
@@ -59,36 +59,36 @@ IMAGES_DIR = RESOURCE_DIR / "assets" / "images"
 
 def image_path(filename):
     """
-    Абсолютен път до картинка от assets/images, като str (за QIcon/QPixmap).
+    Absolute path to an image from assets/images, as str (for QIcon/QPixmap).
 
-    Не ползваме относителни пътища ("assets/images/...") - те зависят от
-    текущата работна папка. От терминал в папката на програмата работи,
-    но при стартиране от менюто с приложения/пряк път работната папка е
-    друга (обикновено $HOME) и иконите на бутоните изчезват.
+    We don't use relative paths ("assets/images/...") - they depend on the
+    current working directory. From a terminal in the program folder it works,
+    but when launched from the applications menu/a shortcut the working
+    directory is different (usually $HOME) and the button icons disappear.
     """
     return str(IMAGES_DIR / filename)
 
-# Икони за различни операционни системи ✅
-APP_ICON_WINDOWS = ICON_DIR / "app_icon.ico"    # .ico за Windows
-APP_ICON_MAC = ICON_DIR / "app_icon.icns"       # .icns за macOS  
-APP_ICON_LINUX = ICON_DIR / "app_icon.png"      # .png за Linux
+# Icons for different operating systems ✅
+APP_ICON_WINDOWS = ICON_DIR / "app_icon.ico"    # .ico for Windows
+APP_ICON_MAC = ICON_DIR / "app_icon.icns"       # .icns for macOS  
+APP_ICON_LINUX = ICON_DIR / "app_icon.png"      # .png for Linux
 
 # ✅ AUTOMATIC TESSERACT PATHS FOR ALL OS
 #
-# Само системна инсталация, съзнателно, на трите платформи - без bundled
-# "Local" копие никъде. Причини:
-# - macOS никога не е имал bundled опция (изисква dylibbundler на реална
-#   Mac машина, за да стане преносим bundle).
-# - Linux AppImage bundling се отказа - AppImage-ът твърдо задава
-#   собствения си TESSDATA_PREFIX при build-ване, така че бутонът
-#   "Свали език" не може да добавя нови езици към него (потвърдено от
-#   AppImageBuilder.yml на конкретния AppImage build).
-# - Windows bundled копие вече е излишно усложнение при систематична
-#   инсталация, която е налична и по-удобна за поддръжка навсякъде.
+# System installation only, deliberately, on all three platforms - no bundled
+# "Local" copy anywhere. Reasons:
+# - macOS never had a bundled option (it requires dylibbundler on a real
+#   Mac machine to make a portable bundle).
+# - Linux AppImage bundling was dropped - the AppImage hard-codes its own
+#   TESSDATA_PREFIX at build time, so the "Download language" button
+#   cannot add new languages to it (confirmed by the AppImageBuilder.yml
+#   of the actual AppImage build).
+# - A Windows bundled copy is now an unnecessary complication given a
+#   system installation, which is available and easier to maintain everywhere.
 #
-# Ако Tesseract липсва системно, показваме ясен диалог с инструкции
-# (виж ui/dialogs.py, show_tesseract_missing) - "инсталирай сам"
-# е съзнателна, консистентна политика на трите платформи.
+# If Tesseract is missing from the system, we show a clear dialog with
+# instructions (see ui/dialogs.py, show_tesseract_missing) - "install it
+# yourself" is a deliberate, consistent policy on all three platforms.
 if sys.platform == "win32":
     TESSERACT_PATHS = [
         Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe"),  # System
@@ -109,15 +109,15 @@ else:
 
 def find_tessdata_dir(tesseract_binary_path):
     """
-    Извлича tessdata папката СПРЯМО намерения tesseract binary - вместо да
-    се гадаят отделни абсолютни системни пътища (крехко - трябва да се
-    поддържа ръчно при всяка нова версия/дистрибуция), следваме РЕАЛНАТА
-    инсталация. Проверява познатите относителни разположения:
-      - до самия binary (Windows UB Mannheim)
+    Derives the tessdata folder RELATIVE to the found tesseract binary - instead
+    of guessing separate absolute system paths (fragile - must be maintained
+    by hand for every new version/distribution), we follow the ACTUAL
+    installation. Checks the known relative locations:
+      - next to the binary itself (Windows UB Mannheim)
       - ../share/tessdata (Homebrew: bin/tesseract -> share/tessdata)
-      - ../share/tesseract-ocr/<версия>/tessdata (Linux система пакети -
-        версията варира по дистрибуция/година, затова glob, не твърдо число)
-    Връща Path, или None ако нищо не съвпадне.
+      - ../share/tesseract-ocr/<version>/tessdata (Linux system packages -
+        the version varies by distribution/year, hence a glob, not a fixed number)
+    Returns a Path, or None if nothing matches.
     """
     binary_dir = tesseract_binary_path.parent
 
@@ -128,8 +128,8 @@ def find_tessdata_dir(tesseract_binary_path):
 
     share_root = binary_dir.parent / "share" / "tesseract-ocr"
     if share_root.exists():
-        # reverse=True - по-новите версии обикновено сортират по-накрая
-        # ("5" след "4.00"), пробваме тях първо.
+        # reverse=True - newer versions usually sort later
+        # ("5" after "4.00"), so we try them first.
         candidates.extend(sorted(share_root.glob("*/tessdata"), reverse=True))
 
     for candidate in candidates:
@@ -140,12 +140,12 @@ def find_tessdata_dir(tesseract_binary_path):
 
 def get_tessdata_dir():
     """
-    Папката с езиците на системния Tesseract (TESSDATA_PREFIX, който
-    configure_tesseract() в core/tesseract_setup.py задава спрямо намерената инсталация), или None, ако
-    не е открита. Там се записват и новите езици от "Свали език".
+    The system Tesseract's language folder (TESSDATA_PREFIX, which
+    configure_tesseract() in core/tesseract_setup.py sets based on the found installation), or None if
+    not found. New languages from "Download language" are also saved there.
 
-    Системните пътища (/usr/share/tesseract-ocr/...) обикновено изискват
-    root права за писане - тогава "Свали език" показва грешка с обяснение.
+    System paths (/usr/share/tesseract-ocr/...) usually require root
+    permissions to write - then "Download language" shows an error with an explanation.
     """
     env_prefix = os.environ.get("TESSDATA_PREFIX")
     if env_prefix and Path(env_prefix).is_dir():
@@ -155,19 +155,19 @@ def get_tessdata_dir():
 
 def get_available_ocr_languages():
     """
-    Наличните OCR езици - имената на .traineddata файловете в tessdata
-    папката (без разширението, напр. "eng", "bul"). "osd" се изключва - не
-    е език, а помощен файл за откриване на ориентация на страницата.
+    The available OCR languages - the names of the .traineddata files in the
+    tessdata folder (without the extension, e.g. "eng", "bul"). "osd" is excluded -
+    it is not a language but a helper file for detecting page orientation.
     """
     folder = get_tessdata_dir()
     if folder:
         langs = sorted(p.stem for p in folder.glob("*.traineddata") if p.stem.lower() != "osd")
         if langs:
             return langs
-    return ["eng"]  # разумна стойност, ако tessdata папката не е намерена
+    return ["eng"]  # sensible default if the tessdata folder is not found
 
 
-# Настройки по подразбиране
+# Default settings
 DEFAULT_SETTINGS = {
     "text_size": 14, 
     "font_color": "#FFFFFF", 
@@ -188,15 +188,15 @@ DEFAULT_SETTINGS = {
     "hotkey_enabled": False,
     "hotkey_combo": "<ctrl>+<alt>+t",
     "hotkey_retranslate_combo": "<ctrl>+<alt>+r",
-    "translation_timeout": 25,  # секунди
-    "text_window_geometry": None,  # [x, y, ширина, височина] на прозореца за превод на текст
-    "text_auto_translate": True,  # отметката "Автоматичен превод" в прозореца за превод на текст
+    "translation_timeout": 25,  # seconds
+    "text_window_geometry": None,  # [x, y, width, height] of the text translation window
+    "text_auto_translate": True,  # the "Auto translate" checkbox in the text translation window
 }
 
-# Настройки от стари версии, които вече не се ползват. Махат се при
-# зареждане, за да не остават завинаги в settings.json.
+# Settings from old versions that are no longer used. They are removed on
+# load so they don't stay in settings.json forever.
 OBSOLETE_SETTINGS = (
-    "mark_translate_enabled",  # до 2.x: отделни бутони "Маркиране" и "Превод"
-    "ollama_model",  # до 3.1: Ollama, заменена от превода без интернет (Argos)
+    "mark_translate_enabled",  # up to 2.x: separate "Mark" and "Translate" buttons
+    "ollama_model",  # up to 3.1: Ollama, replaced by offline translation (Argos)
     "ollama_url",
 )

@@ -1,18 +1,18 @@
 """
-ПРЕВОД БЕЗ ИНТЕРНЕТ - МОДЕЛИТЕ НА ARGOS TRANSLATE
+OFFLINE TRANSLATION - ARGOS TRANSLATE MODELS
 
-Ползваме самите модели на Argos Translate (свободни, OPUS/OpenNMT), но не и
-пакета argostranslate - той дърпа тежки зависимости (spaCy и т.н.). Моделът
-е модел за CTranslate2 + речник за SentencePiece, затова стигат тези две
-малки библиотеки:
+We use the Argos Translate models themselves (free, OPUS/OpenNMT), but not
+the argostranslate package - it pulls in heavy dependencies (spaCy, etc.). The model
+is a CTranslate2 model + a SentencePiece vocabulary, so these two
+small libraries are enough:
 
     pip install ctranslate2 sentencepiece
 
-Моделите са по двойка езици (напр. en -> bg, ~70 MB) и се свалят веднъж от
-Настройки в папка "argos-models" до програмата. Когато няма директен модел
-(напр. de -> bg), превеждаме през английски: de -> en -> bg.
+Models are per language pair (e.g. en -> bg, ~70 MB) and are downloaded once from
+Settings into an "argos-models" folder next to the program. When there is no direct model
+(e.g. de -> bg), we translate via English: de -> en -> bg.
 
-Тук няма Qt - нишката за сваляне е отделно, в core/argos_download.py.
+No Qt here - the download thread is separate, in core/argos_download.py.
 """
 
 import json
@@ -28,11 +28,11 @@ from utils.logging_setup import logger
 
 MODELS_DIR = DATA_DIR / "argos-models"
 INDEX_URL = "https://raw.githubusercontent.com/argosopentech/argospm-index/main/index.json"
-# Сървърът с моделите връща 403 на заявки с подписа на Python - представяме се като браузър.
+# The model server returns 403 to requests with Python's signature - so we pose as a browser.
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)"
 PIVOT = "en"
 
-# Език на Tesseract (настройката "OCR език") -> двубуквен код, какъвто ползва Argos.
+# Tesseract language (the "OCR language" setting) -> two-letter code as used by Argos.
 TESS_TO_ISO = {
     "eng": "en", "bul": "bg", "deu": "de", "fra": "fr", "spa": "es", "ita": "it", "por": "pt",
     "nld": "nl", "pol": "pl", "ces": "cs", "slk": "sk", "slv": "sl", "hrv": "hr", "srp": "sr",
@@ -46,25 +46,25 @@ TESS_TO_ISO = {
 
 
 class ArgosNotInstalledError(Exception):
-    """Липсват библиотеките ctranslate2/sentencepiece (при пускане от изходен код без pip install)."""
+    """The ctranslate2/sentencepiece libraries are missing (when run from source without pip install)."""
 
 
 class ArgosModelMissingError(Exception):
-    """Няма свален модел за двойката езици; str(e) е "en → bg"."""
+    """No downloaded model for the language pair; str(e) is "en → bg"."""
 
 
 class ArgosPackageUnavailableError(Exception):
-    """Argos няма модел за тази двойка (и през английски); str(e) е "xx → yy"."""
+    """Argos has no model for this pair (not even via English); str(e) is "xx → yy"."""
 
 
 def libraries_available():
-    """Има ли ctranslate2 и sentencepiece (без да ги зарежда реално - това е бавно)."""
+    """Whether ctranslate2 and sentencepiece are available (without actually loading them - that is slow)."""
     import importlib.util
     return all(importlib.util.find_spec(name) is not None for name in ("ctranslate2", "sentencepiece"))
 
 
 def source_language(ocr_lang):
-    """'eng+deu' -> 'en': първият език за разпознаване е езикът на оригинала."""
+    """'eng+deu' -> 'en': the first recognition language is the source language."""
     first = (ocr_lang or "eng").split("+")[0].strip().lower()
     for suffix in ("_vert", "_latn"):  # "jpn_vert" -> "jpn"
         first = first.removesuffix(suffix)
@@ -76,11 +76,11 @@ def pair_label(pair):
 
 
 # ----------------------------------------------------------------------
-# Кои модели са свалени и кои трябват
+# Which models are downloaded and which are needed
 # ----------------------------------------------------------------------
 
 def installed_pairs(models_dir=None):
-    """Свалените двойки като {("en", "bg"), ...} - по папките "en_bg" с metadata.json."""
+    """The downloaded pairs as {("en", "bg"), ...} - from the "en_bg" folders with metadata.json."""
     root = Path(models_dir or MODELS_DIR)
     pairs = set()
     if not root.is_dir():
@@ -95,8 +95,8 @@ def installed_pairs(models_dir=None):
 
 def find_route(source, target, available):
     """
-    Пътят на превода по наличните двойки: [("de","bg")] директно, или
-    [("de","en"), ("en","bg")] през английски. None - ако няма път.
+    The translation path over the available pairs: [("de","bg")] directly, or
+    [("de","en"), ("en","bg")] via English. None if there is no path.
     """
     if source == target:
         return []
@@ -108,7 +108,7 @@ def find_route(source, target, available):
 
 
 def parse_index(index_json):
-    """Индексът на Argos (JSON текст) -> {("en","bg"): url, ...} (само преводните пакети)."""
+    """The Argos index (JSON text) -> {("en","bg"): url, ...} (translation packages only)."""
     result = {}
     for package in json.loads(index_json):
         source, target, links = package.get("from_code"), package.get("to_code"), package.get("links") or []
@@ -119,9 +119,9 @@ def parse_index(index_json):
 
 def pairs_to_download(source, target, index, installed=()):
     """
-    Кои модели трябва да се свалят за превод source -> target (вече
-    свалените се пропускат). Хвърля ArgosPackageUnavailableError, ако
-    Argos няма такъв превод нито директно, нито през английски.
+    Which models must be downloaded to translate source -> target (already
+    downloaded ones are skipped). Raises ArgosPackageUnavailableError if
+    Argos has no such translation, neither directly nor via English.
     """
     route = find_route(source, target, set(index))
     if route is None:
@@ -131,8 +131,8 @@ def pairs_to_download(source, target, index, installed=()):
 
 def install_package(archive_path, pair, models_dir=None):
     """
-    Разархивира свален .argosmodel в models_dir/<from>_<to>. В архива има
-    една папка с metadata.json, model/ (CTranslate2) и sentencepiece.model.
+    Extracts a downloaded .argosmodel into models_dir/<from>_<to>. The archive contains
+    one folder with metadata.json, model/ (CTranslate2) and sentencepiece.model.
     """
     root = Path(models_dir or MODELS_DIR)
     root.mkdir(parents=True, exist_ok=True)
@@ -144,8 +144,8 @@ def install_package(archive_path, pair, models_dir=None):
         metadata = next(Path(tmp).rglob("metadata.json"), None)
         if metadata is None or not _model_files(metadata.parent):
             raise ValueError(f"Unsupported Argos package format: {archive_path}")
-        # Първо пълно копие до .tmp, после едно преименуване - наполовина
-        # копиран модел (пълен диск, антивирусна) никога не изглежда "свален".
+        # First a full copy to .tmp, then a single rename - a half-copied
+        # model (full disk, antivirus) never looks "downloaded".
         shutil.rmtree(staging, ignore_errors=True)
         shutil.copytree(metadata.parent, staging)
     ArgosTranslator.unload(pair)
@@ -162,7 +162,7 @@ def _read_metadata(package_dir):
 
 
 def _model_files(package_dir):
-    """(папка с модела за CTranslate2, файл на SentencePiece) или None."""
+    """(CTranslate2 model folder, SentencePiece file) or None."""
     model_bin = next(Path(package_dir).rglob("model.bin"), None)
     tokenizer = next(Path(package_dir).rglob("sentencepiece.model"), None)
     if model_bin is None or tokenizer is None:
@@ -171,24 +171,24 @@ def _model_files(package_dir):
 
 
 # ----------------------------------------------------------------------
-# Деление на изречения
+# Sentence splitting
 # ----------------------------------------------------------------------
 
-# След тези думи точката не е край на изречение ("No. 1", "Mr. Smith", "e.g. this").
+# After these words the period does not end a sentence ("No. 1", "Mr. Smith", "e.g. this").
 _ABBREVIATIONS = {
     "no", "nr", "mr", "mrs", "ms", "dr", "st", "vs", "etc", "e.g", "i.e", "fig", "p", "pp", "vol",
     "ch", "approx", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
     "т", "г", "гр", "ул", "бр", "стр", "др", "напр", "вкл", "проф", "д-р", "лв", "млн", "хил", "мин",
 }
 _SENTENCE_END = re.compile(r"[.!?…]+[\"'”’)\]]*\s+|[。！？]+[」』”’)）]*\s*")
-# Моделът спира превода след ~256 токена - по-дълги парчета се делят.
+# The model stops translating after ~256 tokens - longer chunks are split.
 _MAX_CHUNK_CHARS = 300
 
 
 def split_sentences(text):
     """
-    Дели текста на изречения - моделът превежда изречение по изречение.
-    Не дели след инициали ("A.A. Milne") и съкращения ("No. 1", "e.g.").
+    Splits the text into sentences - the model translates sentence by sentence.
+    Does not split after initials ("A.A. Milne") or abbreviations ("No. 1", "e.g.").
     """
     sentences, start = [], 0
     for match in _SENTENCE_END.finditer(text):
@@ -199,7 +199,7 @@ def split_sentences(text):
             continue
         following = text[end:end + 1]
         if following.isalpha() and following.islower():
-            continue  # "Wait... what" - изречението продължава
+            continue  # "Wait... what" - the sentence continues
         sentences.append(text[start:end].strip())
         start = end
     tail = text[start:].strip()
@@ -209,7 +209,7 @@ def split_sentences(text):
 
 
 def _split_long(sentence, max_chars=_MAX_CHUNK_CHARS):
-    """Много дълго "изречение" (OCR текст без точки) - на парчета при запетая или интервал."""
+    """A very long "sentence" (OCR text without periods) - split into chunks at a comma or space."""
     chunks = []
     while len(sentence) > max_chars:
         cut = max(sentence.rfind(", ", 0, max_chars), sentence.rfind("; ", 0, max_chars))
@@ -229,26 +229,26 @@ def _is_abbreviation(word):
     if not word:
         return False
     if len(word.replace(".", "")) == 1 and word.replace(".", "").isalpha():
-        return True  # инициал: "A." в "A.A. Milne", "J. Smith"
+        return True  # initial: "A." in "A.A. Milne", "J. Smith"
     if re.fullmatch(r"(?:[A-Za-zА-Яа-я]\.)+[A-Za-zА-Яа-я]?", word):
         return True  # "A.A", "e.g", "U.S"
     return word.lower() in _ABBREVIATIONS
 
 
 def detokenize(tokens):
-    """SentencePiece бележи началото на дума с '▁' - превръщаме ги в интервали."""
+    """SentencePiece marks the start of a word with '▁' - we turn these into spaces."""
     return "".join(tokens).replace("▁", " ").strip()
 
 
 # ----------------------------------------------------------------------
-# Превод
+# Translation
 # ----------------------------------------------------------------------
 
 class ArgosTranslator:
     """
-    Превежда с вече свалените модели. Моделите се зареждат при първа нужда
-    и се пазят в паметта (зареждането е ~0.1 s, но не при всеки превод).
-    source_lang - двубуквен код (виж source_language()).
+    Translates with the already downloaded models. Models are loaded on first use
+    and kept in memory (loading takes ~0.1 s, but not on every translation).
+    source_lang - two-letter code (see source_language()).
     """
 
     _cache = {}
@@ -270,10 +270,10 @@ class ArgosTranslator:
 
     def _translate_pair(self, text, pair):
         translator, tokenizer, prefix = self._load(pair)
-        # Абзаците (празен ред) се пазят; всеки абзац се дели на изречения.
+        # Paragraphs (blank line) are preserved; each paragraph is split into sentences.
         paragraphs = []
         for paragraph in re.split(r"\n\s*\n", text):
-            lines = " ".join(paragraph.split())  # редовете на един абзац - в едно
+            lines = " ".join(paragraph.split())  # the lines of one paragraph - joined into one
             sentences = split_sentences(lines)
             if not sentences:
                 paragraphs.append("")
@@ -303,20 +303,20 @@ class ArgosTranslator:
                     raise ArgosModelMissingError(pair_label(pair))
                 model_dir, tokenizer_file = files
                 import os
-                logger.info(f"Зареждам модела за превод без интернет {pair_label(pair)} (ctranslate2 {getattr(ctranslate2, '__version__', '?')})")
+                logger.info(f"Loading offline translation model {pair_label(pair)} (ctranslate2 {getattr(ctranslate2, '__version__', '?')})")
                 translator = ctranslate2.Translator(
                     str(model_dir), device="cpu", inter_threads=1, intra_threads=min(4, os.cpu_count() or 1)
                 )
                 tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(tokenizer_file))
-                # Някои пакети на Argos искат езиков етикет в началото на превода.
+                # Some Argos packages require a language tag at the start of the translation.
                 prefix = _read_metadata(self.models_dir / f"{pair[0]}_{pair[1]}").get("target_prefix") or ""
                 self._cache[key] = (translator, tokenizer, prefix)
-                logger.info(f"Моделът {pair_label(pair)} е зареден")
+                logger.info(f"Model {pair_label(pair)} loaded")
             return self._cache[key]
 
     @classmethod
     def unload(cls, pair=None):
-        """Освобождава заредените модели (напр. преди изтриване на двойка)."""
+        """Releases the loaded models (e.g. before deleting a pair)."""
         with cls._lock:
             for key in [k for k in cls._cache if pair is None or k[1] == pair]:
                 cls._cache.pop(key, None)

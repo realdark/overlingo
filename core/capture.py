@@ -1,8 +1,8 @@
 """
-ЗАСНЕМАНЕ НА ЕКРАНА (screenshot + OCR preprocessing)
+SCREEN CAPTURE (screenshot + OCR preprocessing)
 
-Извадено от ui/main_window.py, за да не зависи UI класът от
-mss/OpenCV детайлите, и за да може логиката да се тества отделно.
+Extracted from ui/main_window.py so the UI class doesn't depend on the
+mss/OpenCV details, and so the logic can be tested separately.
 """
 
 from utils.imports import mss, cv2, np
@@ -10,19 +10,19 @@ from utils.logging_setup import logger
 
 
 class CaptureError(Exception):
-    """Грешка при заснемане на екрана (твърде малка област, липсващ дисплей и т.н.)."""
+    """Screen capture error (region too small, missing display, etc.)."""
     pass
 
 
 MIN_REGION_SIZE = 10
-# Колко пъти се уголемява картинката преди OCR (по-точно разпознаване на
-# дребен текст). Детекторът на шрифта трябва да знае това, за да мери в
-# истински пиксели от екрана.
+# How many times the image is upscaled before OCR (more accurate recognition
+# of small text). The font size detector needs to know this in order to
+# measure in real screen pixels.
 OCR_UPSCALE = 2
 
 
 def is_region_too_small(rect):
-    """Проверява дали маркираната област е достатъчно голяма за OCR."""
+    """Checks whether the selected region is large enough for OCR."""
     width = rect.right() - rect.left()
     height = rect.bottom() - rect.top()
     return width < MIN_REGION_SIZE or height < MIN_REGION_SIZE
@@ -30,10 +30,10 @@ def is_region_too_small(rect):
 
 def capture_region_as_gray(rect):
     """
-    Прави screenshot на подадения rect и връща preprocessed
-    grayscale изображение (numpy array), готово за OCR.
+    Takes a screenshot of the given rect and returns a preprocessed
+    grayscale image (numpy array), ready for OCR.
 
-    Хвърля CaptureError при твърде малка област или грешка при заснемане.
+    Raises CaptureError if the region is too small or the capture fails.
     """
     if is_region_too_small(rect):
         raise CaptureError("area_too_small")
@@ -52,7 +52,7 @@ def capture_region_as_gray(rect):
     bgr = cv2.cvtColor(raw, cv2.COLOR_BGRA2BGR)
     gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
 
-    # Бинаризация (Otsu) + уголемяване - подобряват точността на OCR
+    # Binarization (Otsu) + upscaling - improve OCR accuracy
     _, gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     gray = cv2.resize(gray, None, fx=OCR_UPSCALE, fy=OCR_UPSCALE, interpolation=cv2.INTER_CUBIC)
 
@@ -61,25 +61,25 @@ def capture_region_as_gray(rect):
 
 def warm_up():
     """
-    Прави еднократен, изхвърлен screenshot - само за да "загрее" mss-ката
-    еднократна инициализация (на Windows: свързване с GDI функции през
-    ctypes; на Linux: свързване с X сървъра). Без това, ПЪРВОТО реално
-    маркиране на потребителя замръзва интерфейса за 1-2 секунди, защото
-    start_selection() работи синхронно в главната нишка. Вика се веднъж
-    във фонова нишка при стартиране на приложението (виж MainWindow),
-    за да плати тази цена тихо, преди потребителят изобщо да е кликнал.
+    Takes a single throwaway screenshot - only to "warm up" mss's one-time
+    initialization (on Windows: binding to GDI functions via ctypes; on
+    Linux: connecting to the X server). Without this, the user's FIRST real
+    selection freezes the UI for 1-2 seconds, because start_selection()
+    runs synchronously on the main thread. Called once in a background
+    thread at application startup (see MainWindow), to pay this cost
+    quietly before the user has even clicked.
     """
     try:
         with mss.mss() as sct:
             sct.grab(sct.monitors[0])
     except Exception as e:
-        logger.warning(f"Неуспешно загряване на mss: {e}")
+        logger.warning(f"Failed to warm up mss: {e}")
 
 
 def capture_full_screen_qimage():
     """
-    Прави screenshot на целия основен монитор и го връща като QImage
-    (използва се от прозореца за маркиране на област).
+    Takes a screenshot of the entire primary monitor and returns it as a QImage
+    (used by the region selection window).
     """
     from utils.imports import QtGui
 
@@ -94,5 +94,5 @@ def capture_full_screen_qimage():
         image = QtGui.QImage(
             img_bytes, width, height, bytes_per_line, QtGui.QImage.Format_RGB888
         )
-        # Копираме данните, за да не увиснат след освобождаването на raw/img_bytes
+        # Copy the data so it doesn't dangle after raw/img_bytes are freed
         return image.copy()

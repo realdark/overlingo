@@ -1,5 +1,5 @@
 """
-UI модул - потребителски интерфейс компоненти
+UI module - user interface components
 """
 from .components import SelectionWindow, WindowDragFilter, SecondaryOverlay
 from .main_window import MainWindow

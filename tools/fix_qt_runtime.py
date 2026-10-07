@@ -1,21 +1,22 @@
 """
-WINDOWS: СТАРИЯТ MSVCP140.DLL НА PyQt5 СРИВА ctranslate2 / sentencepiece
+WINDOWS: PyQt5'S OLD MSVCP140.DLL CRASHES ctranslate2 / sentencepiece
 
-PyQt5 (пакетът PyQt5-Qt5 5.15.2, последният за Windows) носи в
-PyQt5\\Qt5\\bin своя msvcp140.dll от 2020 г. Щом PyQt5 се зареди първи,
-Windows ползва него за всички. ctranslate2 и sentencepiece са компилирани
-с по-нов Visual Studio и с този стар файл падат при първото заключване на
-mutex - процесът изчезва без грешка (код 3221225477 / 0xC0000005).
+PyQt5 (the PyQt5-Qt5 5.15.2 package, the last one for Windows) ships its own
+msvcp140.dll from 2020 in PyQt5\\Qt5\\bin. Once PyQt5 is loaded first,
+Windows uses that copy for everyone. ctranslate2 and sentencepiece are built
+with a newer Visual Studio and crash with this old file on the first mutex
+lock - the process vanishes without an error (code 3221225477 / 0xC0000005).
 
-Така пада и PyInstaller при билд ("Isolated subprocess crashed while
-importing package 'sentencepiece'"), защото той внася пакетите в един
-процес, започвайки с PyQt5. Освен това би сложил стария файл в билда.
+PyInstaller crashes the same way during the build ("Isolated subprocess
+crashed while importing package 'sentencepiece'"), because it imports the
+packages in one process, starting with PyQt5. It would also put the old
+file into the build.
 
-Решение: ако в Windows\\System32 има по-нова версия на същия файл,
-старият в PyQt5 се преименува на *.old - тогава Qt ползва системния
-(съвместим назад). Нищо не се трие; връщане: махни ".old" от името.
+Fix: if Windows\\System32 has a newer version of the same file, the old
+one in PyQt5 is renamed to *.old - Qt then uses the system one
+(backward compatible). Nothing is deleted; to revert, remove ".old" from the name.
 
-Пуска се автоматично от build.bat; може и ръчно: python tools\\fix_qt_runtime.py
+Run automatically by build.bat; can also be run by hand: python tools\\fix_qt_runtime.py
 """
 
 import ctypes
@@ -24,8 +25,8 @@ import os
 import sys
 from pathlib import Path
 
-# Конзолата на Windows (и логовете в GitHub Actions) често не е UTF-8 -
-# без това българският текст гърми с UnicodeEncodeError.
+# The Windows console (and GitHub Actions logs) is often not UTF-8 -
+# without this, non-ASCII text fails with UnicodeEncodeError.
 if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(errors="replace")
 
@@ -34,7 +35,7 @@ RUNTIME_DLLS = ("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_at
 
 
 def file_version(path):
-    """(major, minor, build, private) от ресурса на DLL файла; None, ако няма."""
+    """(major, minor, build, private) from the DLL's version resource; None if absent."""
     version_dll = ctypes.WinDLL("version")
     size = version_dll.GetFileVersionInfoSizeW(str(path), None)
     if not size:
@@ -55,9 +56,9 @@ def file_version(path):
 def main():
     if sys.platform != "win32":
         return 0
-    spec = importlib.util.find_spec("PyQt5")  # без import - иначе DLL-ите се заключват
+    spec = importlib.util.find_spec("PyQt5")  # no import - otherwise the DLLs get locked
     if spec is None or not spec.submodule_search_locations:
-        print("PyQt5 не е инсталиран - няма какво да се оправя.")
+        print("PyQt5 is not installed - nothing to fix.")
         return 0
     qt_bin = Path(list(spec.submodule_search_locations)[0]) / "Qt5" / "bin"
     system32 = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
@@ -76,15 +77,15 @@ def main():
                 backup.unlink()
             qt_file.rename(backup)
         except OSError as e:
-            print(f"Не успях да преименувам {qt_file}: {e}")
-            print("Затвори всички Python програми (и Overlingo) и пусни отново.")
+            print(f"Could not rename {qt_file}: {e}")
+            print("Close all Python programs (including Overlingo) and run again.")
             return 1
         changed += 1
-        print(f"{name}: PyQt5 {'.'.join(map(str, qt_version))} -> системен "
-              f"{'.'.join(map(str, system_version))} (старият е запазен като {backup.name})")
+        print(f"{name}: PyQt5 {'.'.join(map(str, qt_version))} -> system "
+              f"{'.'.join(map(str, system_version))} (old one kept as {backup.name})")
 
     if not changed:
-        print("C++ библиотеките на PyQt5 са наред.")
+        print("PyQt5's C++ runtime libraries are fine.")
     return 0
 
 

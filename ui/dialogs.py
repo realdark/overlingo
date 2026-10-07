@@ -1,8 +1,8 @@
 """
-ИНФОРМАЦИОННИ ПРОЗОРЦИ: Помощ, За програмата, липсващ Tesseract
+INFO DIALOGS: Help, About, missing Tesseract
 
-Изнесени от ui/main_window.py - самостоятелни са и не зависят от
-състоянието на главния прозорец, само от текстовете (i18n).
+Moved out of ui/main_window.py - they are self-contained and depend only
+on the texts (i18n), not on the main window's state.
 """
 
 from utils.imports import QtWidgets, QtCore, QtGui
@@ -10,8 +10,8 @@ from utils.version import APP_VERSION
 from core.tesseract_setup import configure_tesseract, install_hint, terminal_hint_key
 from core.update_check import STATUS_NEWER, STATUS_ERROR
 
-# Изрични ключове (не f"about_feature{i}") - за да се намират с търсене в
-# кода и тестът "всеки текст в JSON се ползва някъде" да ги вижда.
+# Explicit keys (not f"about_feature{i}") - so they can be found by searching
+# the code and the "every text in the JSON is used somewhere" test can see them.
 ABOUT_FEATURE_KEYS = (
     "about_feature1", "about_feature2", "about_feature3", "about_feature4", "about_feature5",
     "about_feature6", "about_feature7", "about_feature8", "about_feature9", "about_feature10",
@@ -21,7 +21,7 @@ ABOUT_TECH_KEYS = (
     "about_tech1", "about_tech2", "about_tech3", "about_tech4",
     "about_tech5", "about_tech6", "about_tech7", "about_tech8",
 )
-HELP_SECTION_KEYS = (  # (заглавие, текст)
+HELP_SECTION_KEYS = (  # (title, text)
     ("help_requirements_title", "help_requirements_body"),
     ("help_workflow_title", "help_workflow_body"),
     ("help_interface_title", "help_interface_body"),
@@ -41,7 +41,7 @@ def _rich_message(parent, title, html, icon=QtWidgets.QMessageBox.Information):
 
 
 def show_about(parent, i18n):
-    """Прозорецът "За програмата"."""
+    """The "About" dialog."""
     t = i18n.tr
     features = "".join(f"<li>{t(key)}</li>" for key in ABOUT_FEATURE_KEYS)
     techs = "".join(f"<li>{t(key)}</li>" for key in ABOUT_TECH_KEYS)
@@ -61,7 +61,7 @@ def show_about(parent, i18n):
 
 
 def show_help(parent, i18n):
-    """Прозорецът с кратко ръководство."""
+    """The short user guide dialog."""
     t = i18n.tr
     sections = "".join(f"<p><b>{t(title)}</b></p><p>{t(body)}</p>" for title, body in HELP_SECTION_KEYS)
     html = f"<h3>{t('help_title')}</h3><p>{t('help_intro')}</p>{sections}"
@@ -72,10 +72,10 @@ def show_help(parent, i18n):
 
 def show_tesseract_missing(parent, i18n):
     """
-    Диалог с командата за инсталиране на Tesseract. "Провери отново" търси
-    пак без рестарт, "Копирай командата" я слага в клипборда - и в двата
-    случая диалогът остава, докато Tesseract не бъде намерен или
-    потребителят не го затвори. Връща True, ако Tesseract е намерен.
+    Dialog with the Tesseract install command. "Check again" searches
+    again without a restart, "Copy command" puts it on the clipboard - in both
+    cases the dialog stays open until Tesseract is found or the
+    user closes it. Returns True if Tesseract was found.
     """
     t = i18n.tr
     command, alt_url = install_hint()
@@ -110,9 +110,9 @@ def show_tesseract_missing(parent, i18n):
 
 def show_update_result(parent, i18n, result):
     """
-    Резултат от "Провери за нова версия" (core.update_check.UpdateResult):
-    нова версия - "Изтегли" (отваря страницата на release-а) и OK;
-    последна версия или грешка - само OK.
+    Result of "Check for updates" (core.update_check.UpdateResult):
+    new version - "Download" (opens the release page) and OK;
+    already up to date or error - OK only.
     """
     t = i18n.tr
     if result.status == STATUS_NEWER:

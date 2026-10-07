@@ -1,9 +1,9 @@
 PyQt5>=5.15.0
 pytesseract>=0.3.0
-# headless, НЕ обикновен opencv-python - той носи собствена копия на Qt
-# plugins, която се сблъсква с PyQt5-ината ("Could not load the Qt
-# platform plugin xcb"). Не ползваме никакви GUI функции от cv2
-# (cv2.imshow и т.н.), само image processing - headless е безопасен.
+# headless, NOT plain opencv-python - that one ships its own copy of the Qt
+# plugins, which clashes with PyQt5's ("Could not load the Qt
+# platform plugin xcb"). We use no GUI functions from cv2
+# (cv2.imshow etc.), only image processing - headless is safe.
 opencv-python-headless>=4.5.0
 numpy>=1.21.0
 deepl>=1.0.0
@@ -12,6 +12,6 @@ edge-tts>=6.0.0
 pygame>=2.0.0
 requests>=2.25.0
 pynput>=1.7.0
-# Превод без интернет (моделите на Argos Translate, core/argos.py)
+# Offline translation (Argos Translate models, core/argos.py)
 ctranslate2>=4.0,<5
 sentencepiece>=0.2.0

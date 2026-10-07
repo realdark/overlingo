@@ -1,27 +1,27 @@
 """
-ГЛОБАЛЕН HOTKEY (Windows и Linux/X11)
+GLOBAL HOTKEY (Windows and Linux/X11)
 
-Ползва pynput.keyboard.GlobalHotKeys, което слуша на системно ниво -
-работи независимо кой прозорец има фокус в момента. Поддържано на:
-- Windows - pynput работи надеждно там без специални разрешения.
-- Linux, САМО под X11 сесия - X11 позволява на обикновени приложения
-  да слушат клавиатурата глобално (същата причина, поради която
-  FullscreenDetector-ът с X11Bypass трика работи там). Открива се чрез
-  XDG_SESSION_TYPE - ако не е изрично "x11" (напр. липсва, или е
-  "wayland"), приемаме, че НЕ е поддържано - по-безопасно да откажем,
-  отколкото да предположим грешно.
-Не е поддържано на:
-- Linux/Wayland - compositor-ът нарочно блокира глобално слушане на
-  клавиатура от нормални приложения, по съображения за сигурност; няма
-  client-side заобикаляне, аналогично на X11Bypass.
-- macOS - изисква изрично Accessibility разрешение и има допълнителни
-  ограничения (SecureEventInput) при определени видове съдържание.
+Uses pynput.keyboard.GlobalHotKeys, which listens at the system level -
+it works regardless of which window currently has focus. Supported on:
+- Windows - pynput works reliably there without special permissions.
+- Linux, ONLY under an X11 session - X11 lets ordinary applications
+  listen to the keyboard globally (the same reason the FullscreenDetector's
+  X11Bypass trick works there). Detected via XDG_SESSION_TYPE - unless
+  it is explicitly "x11" (e.g. missing, or "wayland"), we assume it is
+  NOT supported - it is safer to refuse than to guess wrong.
+Not supported on:
+- Linux/Wayland - the compositor deliberately blocks global keyboard
+  listening by normal applications for security reasons; there is no
+  client-side workaround analogous to X11Bypass.
+- macOS - requires an explicit Accessibility permission and has extra
+  restrictions (SecureEventInput) for certain kinds of content.
 
-pynput вика callback-а от СОБСТВЕНА нишка, не от Qt главната нишка -
-затова HotkeyManager е QObject с pyqtSignal: емитването на сигнал от
-чужда нишка е thread-safe в Qt (автоматично се превръща в queued
-connection), докато директно пипане на widget-и от pynput нишката
-би било опасно.
+pynput calls the callback from its OWN thread, not from the Qt
+main thread - that is why HotkeyManager is a QObject with a
+pyqtSignal: emitting a signal from another thread is thread-safe
+in Qt (it automatically becomes a queued connection), whereas
+touching widgets directly from the pynput thread would be
+dangerous (Qt widgets are not thread-safe).
 """
 
 from utils.imports import QtCore, sys, os
@@ -32,14 +32,14 @@ IS_LINUX_X11 = sys.platform.startswith("linux") and os.environ.get("XDG_SESSION_
 HOTKEY_SUPPORTED = IS_WINDOWS or IS_LINUX_X11
 
 
-# Действия, които могат да имат hotkey.
+# Actions that can have a hotkey.
 ACTION_MARK_TRANSLATE = "mark_translate"
 ACTION_RETRANSLATE = "retranslate"
 
 
 def format_combo(combo):
     """
-    pynput формат -> четим текст за подсказки: "<ctrl>+<alt>+t" -> "Ctrl+Alt+T".
+    pynput format -> readable text for hints: "<ctrl>+<alt>+t" -> "Ctrl+Alt+T".
     """
     if not combo:
         return ""
@@ -56,8 +56,8 @@ def format_combo(combo):
 
 def combo_error(combo):
     """
-    Връща текст на грешката, ако комбинацията не е валиден pynput формат,
-    иначе None. Ако pynput липсва, не можем да проверим - връща None.
+    Returns the error text if the combination is not a valid pynput format,
+    otherwise None. If pynput is missing we cannot check - returns None.
     """
     try:
         from pynput import keyboard
@@ -71,9 +71,9 @@ def combo_error(combo):
 
 
 class HotkeyManager(QtCore.QObject):
-    # действие (ACTION_*), чийто hotkey е натиснат
+    # action (ACTION_*) whose hotkey was pressed
     triggered = QtCore.pyqtSignal(str)
-    # error message (напр. невалиден формат на комбинацията)
+    # error message (e.g. invalid combination format)
     failed = QtCore.pyqtSignal(str)
 
     def __init__(self, parent=None):
@@ -82,10 +82,10 @@ class HotkeyManager(QtCore.QObject):
 
     def start(self, combos):
         """
-        Стартира глобалния слушател. combos е {действие: комбинация} в
-        pynput формат (напр. {"mark_translate": "<ctrl>+<alt>+t"}); празни
-        комбинации се пропускат. Безопасно за повторно извикване - спира
-        предишния слушател, ако има такъв.
+        Starts the global listener. combos is {action: combination} in
+        pynput format (e.g. {"mark_translate": "<ctrl>+<alt>+t"}); empty
+        combinations are skipped. Safe to call repeatedly - stops the
+        previous listener, if any.
         """
         self.stop()
 
@@ -99,7 +99,7 @@ class HotkeyManager(QtCore.QObject):
         try:
             from pynput import keyboard
         except Exception as e:
-            logger.error(f"pynput не е наличен: {e}", exc_info=True)
+            logger.error(f"pynput is not available: {e}", exc_info=True)
             self.failed.emit(str(e))
             return
 
@@ -108,9 +108,9 @@ class HotkeyManager(QtCore.QObject):
                 combo: (lambda a=action: self.triggered.emit(a)) for action, combo in combos.items()
             })
             self._listener.start()
-            logger.info(f"Глобални hotkey-и активни: {combos}")
+            logger.info(f"Global hotkeys active: {combos}")
         except Exception as e:
-            logger.error(f"Невалидна hotkey комбинация {combos}: {e}", exc_info=True)
+            logger.error(f"Invalid hotkey combination {combos}: {e}", exc_info=True)
             self._listener = None
             self.failed.emit(str(e) or repr(e))
 

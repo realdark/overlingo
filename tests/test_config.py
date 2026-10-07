@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
 
 class AppFoldersTest(unittest.TestCase):
-    """Къде са assets и къде се пишат настройките - различно в macOS .app пакета."""
+    """Where assets live and where settings are written - different in the macOS .app bundle."""
 
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()

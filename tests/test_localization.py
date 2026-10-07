@@ -11,8 +11,8 @@ from utils.config import LOCALES_DIR
 
 
 class LocaleFilesTest(unittest.TestCase):
-    """Двата езика трябва да имат едни и същи ключове - иначе част от
-    интерфейса остава непреведена на единия от тях."""
+    """Both languages must have the same keys - otherwise part of the
+    UI stays untranslated in one of them."""
 
     def _load(self, lang):
         with open(LOCALES_DIR / f"{lang}.json", encoding="utf-8") as f:
@@ -24,7 +24,7 @@ class LocaleFilesTest(unittest.TestCase):
         self.assertEqual(sorted(set(en) - set(bg)), [], "ключове само в en.json")
 
     def test_same_placeholders_in_both_languages(self):
-        """{folder}, {error} и т.н. трябва да съвпадат - иначе .format() гърми в диалога с грешката."""
+        """{folder}, {error} etc. must match - otherwise .format() crashes in the error dialog."""
         bg, en = self._load("bg"), self._load("en")
         field = re.compile(r"\{(\w*)\}")
         diff = {k: (field.findall(bg[k]), field.findall(en[k]))
@@ -39,10 +39,10 @@ class LocaleFilesTest(unittest.TestCase):
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 
-# tr("ключ") / t("ключ"), грешки от нишките и от проверката на настройките
+# tr("key") / t("key"), errors from threads and from settings validation
 _KEY_PATTERNS = [
     re.compile(r"""\btr?\(\s*["']([a-z][a-z0-9_]*)["']"""),
-    re.compile(r"""\.emit\([^)]*?["']([a-z][a-z0-9_]*)["'](?!\s*:)"""),  # без ключове на речници
+    re.compile(r"""\.emit\([^)]*?["']([a-z][a-z0-9_]*)["'](?!\s*:)"""),  # excluding dict keys
     re.compile(r"""translation_failed\.emit\(\s*["']([a-z][a-z0-9_]*)["']"""),
     re.compile(r"""SettingsValidationError\(\s*["']([a-z][a-z0-9_]*)["']"""),
     re.compile(r"""CaptureError\(\s*["']([a-z][a-z0-9_]*)["']"""),
@@ -70,7 +70,7 @@ class KeysUsedInCodeTest(unittest.TestCase):
         self.assertEqual(missing, [], "ключове, използвани в кода, но липсващи в JSON")
 
     def test_every_json_key_is_used_somewhere(self):
-        """Обратната посока: текст, който никъде не се споменава в кода, е излишен."""
+        """The reverse direction: text that is never referenced in the code is unused."""
         code = "\n".join(
             p.read_text(encoding="utf-8")
             for folder in ("core", "ui", "utils") for p in (PROJECT_DIR / folder).glob("*.py")

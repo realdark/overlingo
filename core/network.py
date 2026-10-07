@@ -1,10 +1,10 @@
 """
-ПРОВЕРКА ЗА ИНТЕРНЕТ ВРЪЗКА
+INTERNET CONNECTION CHECK
 
-Споделена между core/audio_handler.py (edge-tts) и core/translations.py
-(Google/DeepL/Microsoft) - всички те са онлайн услуги. Преводът без
-интернет (Argos, core/argos.py) нарочно не я ползва - работи изцяло
-на компютъра.
+Shared by core/audio_handler.py (edge-tts) and core/translations.py
+(Google/DeepL/Microsoft) - all of them are online services. Offline
+translation (Argos, core/argos.py) deliberately does not use it - it runs
+entirely on the computer.
 """
 
 from utils.imports import socket
@@ -12,16 +12,16 @@ from utils.imports import socket
 
 def has_internet_connection(host="8.8.8.8", port=53, timeout=1.5):
     """
-    Бърза проверка - опитва TCP връзка към Google DNS (порт 53), без да
-    прави реална HTTP заявка. Не е 100% гаранция (възможно е DNS портът
-    да е достъпен, а конкретната услуга - не), но е достатъчно бърз и
-    надежден сигнал за "няма никаква връзка", за да не чакаме пълния
-    retry цикъл напразно в такъв случай.
+    Quick check - tries a TCP connection to Google DNS (port 53) without
+    making a real HTTP request. Not a 100% guarantee (the DNS port may be
+    reachable while the specific service is not), but it is a fast and
+    reliable enough signal for "no connection at all", so we don't wait
+    through the full retry cycle for nothing in that case.
     """
     try:
-        # Таймаутът е само за тази връзка. (По-рано тук се викаше
-        # socket.setdefaulttimeout(), което сменяше таймаута на ВСИЧКИ
-        # мрежови връзки в програмата.)
+        # The timeout applies only to this connection. (This used to call
+        # socket.setdefaulttimeout(), which changed the timeout of ALL
+        # network connections in the program.)
         with socket.create_connection((host, port), timeout=timeout):
             return True
     except OSError:

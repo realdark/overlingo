@@ -1,8 +1,8 @@
 """
-УПРАВЛЕНИЕ НА НАСТРОЙКИТЕ (зареждане / запазване / валидация)
+SETTINGS MANAGEMENT (load / save / validation)
 
-Извадено от ui/main_window.py. Не зависи от Qt widgets - работи само
-с обикновени dict-ове, за да може лесно да се тества и преизползва.
+Extracted from ui/main_window.py. Does not depend on Qt widgets - works only
+with plain dicts, so it is easy to test and reuse.
 """
 
 from utils.imports import json, os, edge_tts
@@ -12,14 +12,14 @@ from core.translations import create_translator, NoInternetError
 from core import argos
 from core.hotkey_manager import combo_error
 
-# Остават непроменени при "Възстанови настройките по подразбиране":
-# ключът за платена услуга е досадно да се въвежда пак, а позициите на
-# прозорците не са "настройка", която потребителят е избрал съзнателно.
+# Left unchanged by "Restore default settings":
+# the paid-service key is tedious to enter again, and the window
+# positions are not a "setting" the user chose deliberately.
 KEPT_ON_RESET = ("translation_api_key", "window_pos", "text_window_geometry")
 
 
 class SettingsValidationError(Exception):
-    """Хвърля се при невалидни настройки. `message_key` е ключ за превод на UI съобщението."""
+    """Raised on invalid settings. `message_key` is the translation key for the UI message."""
 
     def __init__(self, message_key, detail=""):
         self.message_key = message_key
@@ -28,26 +28,26 @@ class SettingsValidationError(Exception):
 
 
 class SettingsManager:
-    """Зарежда, валидира и записва настройките на приложението в SETTINGS_FILE."""
+    """Loads, validates and saves the application settings in SETTINGS_FILE."""
 
     def load(self):
-        """Зарежда настройки от файл, допълнени с DEFAULT_SETTINGS за липсващи полета."""
+        """Loads settings from the file, filled in with DEFAULT_SETTINGS for missing fields."""
         settings = dict(DEFAULT_SETTINGS)
         try:
             if os.path.exists(SETTINGS_FILE):
                 with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                     settings.update(json.load(f))
         except Exception as e:
-            logger.error(f"Грешка при зареждане на настройки: {e}", exc_info=True)
+            logger.error(f"Error loading settings: {e}", exc_info=True)
         for key in OBSOLETE_SETTINGS:
             settings.pop(key, None)
-        # До 3.1 имаше Ollama - вече я няма; Google работи веднага, без настройка.
+        # Up to 3.1 there was Ollama - it's gone now; Google works right away, with no setup.
         if settings.get("translation_api") == "ollama":
             settings["translation_api"] = "google"
         return settings
 
     def defaults_for_reset(self, current):
-        """Настройките по подразбиране, като запазва KEPT_ON_RESET от current."""
+        """The default settings, keeping KEPT_ON_RESET from current."""
         settings = dict(DEFAULT_SETTINGS)
         for key in KEPT_ON_RESET:
             if key in current:
@@ -56,11 +56,11 @@ class SettingsManager:
 
     def save(self, settings):
         """
-        Записва настройките във файл. Първо целият текст, после временен
-        файл, който заменя стария наведнъж - ако нещо се провали по средата
-        (стойност, която не може да се запише, срив, спиране на тока),
-        старият settings.json остава непокътнат, вместо наполовина записан
-        (което при следващо стартиране би изтрило всички настройки).
+        Saves the settings to the file. First the whole text, then a temporary
+        file that replaces the old one in one step - if something fails midway
+        (a value that can't be serialized, a crash, a power cut),
+        the old settings.json stays intact instead of half-written
+        (which on the next start would wipe all settings).
         """
         tmp_path = f"{SETTINGS_FILE}.tmp"
         try:
@@ -69,14 +69,14 @@ class SettingsManager:
                 f.write(text)
             os.replace(tmp_path, SETTINGS_FILE)
         except Exception as e:
-            logger.error(f"Грешка при запазване на настройките: {e}", exc_info=True)
+            logger.error(f"Error saving settings: {e}", exc_info=True)
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
     def validate(self, settings):
         """
-        Валидира настройки преди прилагане.
-        Хвърля SettingsValidationError при проблем; не връща нищо при успех.
+        Validates settings before applying them.
+        Raises SettingsValidationError on a problem; returns nothing on success.
         """
         if settings["hide_overlay_enabled"] and not settings["overlay_translation_enabled"]:
             raise SettingsValidationError("overlay_hide_warning")
@@ -107,8 +107,8 @@ class SettingsManager:
 
     def _check_translator_key(self, api_type, api_key, target_lang):
         try:
-            # enable_fallback=False - иначе невалиден ключ би изглеждал
-            # валиден, защото Google тихо би поел теста вместо него.
+            # enable_fallback=False - otherwise an invalid key would look
+            # valid, because Google would silently take over the test instead.
             translator = create_translator(api_type, api_key, enable_fallback=False)
             translator.translate("Test", target_lang)
         except NoInternetError as e:
@@ -117,7 +117,7 @@ class SettingsManager:
             raise SettingsValidationError("invalid_deepl_key", str(e)) from e
 
     def _check_argos(self, ocr_lang, target_lang):
-        """Преводът без интернет иска библиотеките и свалени модели за езиците."""
+        """Offline translation needs the libraries and downloaded models for the languages."""
         if not argos.libraries_available():
             raise SettingsValidationError("argos_not_installed")
         source = argos.source_language(ocr_lang)

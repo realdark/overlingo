@@ -1,35 +1,35 @@
 """
-ДЕТЕКЦИЯ НА РАЗМЕРА НА ШРИФТА
+FONT SIZE DETECTION
 
-За "Запази големината на оригиналния шрифт" - преводът в overlay-я да е
-със същия размер като оригиналния текст под него. Без Qt зависимост.
+For "Keep the original font size" - the translation in the overlay should
+have the same size as the original text beneath it. No Qt dependency.
 
-Как се мери (размерът е "font-size" в пиксели, както в стила на overlay-я):
-  1. Tesseract дава кутия за всяка разпозната дума - височината на думата
-     (от горния край на високите букви до долния на "g", "p"...) е около
-     0.75 от размера на шрифта.
-  2. OpenCV дава "петната" текст: картинката за OCR е бинаризирана и после
-     уголемена 2 пъти, а уголемяването оставя тънък сив ореол около буквите,
-     който слепва съседните букви в думи/срички. Медианната височина на
-     тези петна е около 0.875 от размера на шрифта. (Отделните букви не
-     стават - височината на малките букви е много различна при различните
-     шрифтове.) Затова детекторът очаква картинка, подготвена точно като в
-     core/capture.py, и не я бинаризира наново - иначе ореолът изчезва.
-  Крайният резултат е средното от двете - всяко поотделно греши в различни
-  посоки при различни шрифтове, а заедно грешат по-малко.
+How it is measured (the size is "font-size" in pixels, as in the overlay's style):
+  1. Tesseract gives a box for each recognized word - the word height
+     (from the top of the tall letters to the bottom of "g", "p"...) is about
+     0.75 of the font size.
+  2. OpenCV gives the text "blobs": the OCR image is binarized and then
+     upscaled 2x, and the upscaling leaves a thin gray halo around the letters
+     that glues neighboring letters into words/syllables. The median height of
+     these blobs is about 0.875 of the font size. (Individual letters don't
+     work - lowercase letter height varies a lot between fonts.) That is why
+     the detector expects an image prepared exactly as in core/capture.py and
+     does not re-binarize it - otherwise the halo disappears.
+  The final result is the average of the two - each one alone errs in
+  different directions for different fonts, and together they err less.
 
-Коефициентите са измерени върху текст с известен размер (12-40 px, 10
-шрифта, светъл и тъмен фон, малки и главни букви, един и няколко реда):
-средна грешка ~7%, 98% от пробите в рамките на ±20%. Предишната версия
-мереше уголемената за OCR картинка като истински пиксели и изхвърляше
-всичко над 50 px - едрият текст (игри, субтитри) падаше към 14 px.
+The coefficients were measured on text of known size (12-40 px, 10
+fonts, light and dark background, lowercase and uppercase, single and multiple
+lines): mean error ~7%, 98% of samples within ±20%. The previous version
+measured the OCR-upscaled image as real pixels and discarded everything
+above 50 px - large text (games, subtitles) fell to 14 px.
 """
 
 from utils.imports import pytesseract, Output, cv2, np
 from utils.logging_setup import logger
 
-WORD_HEIGHT_TO_FONT = 1.333    # размер ≈ височина на дума × 1.333
-BLOB_HEIGHT_TO_FONT = 1.143    # размер ≈ медианна височина на петно текст × 1.143
+WORD_HEIGHT_TO_FONT = 1.333    # size ≈ word height × 1.333
+BLOB_HEIGHT_TO_FONT = 1.143    # size ≈ median text blob height × 1.143
 MIN_FONT_SIZE, MAX_FONT_SIZE = 8, 120
 MIN_WORD_CONFIDENCE = 60
 
@@ -40,11 +40,11 @@ class FontSizeDetector:
 
     def detect(self, image, scale=1.0):
         """
-        Размерът на шрифта в пиксели на екрана, или None, ако не може да се
-        измери (тогава overlay-ят ползва размера от Настройки).
+        The font size in screen pixels, or None if it cannot be measured
+        (then the overlay uses the size from Settings).
 
-        scale: колко пъти е уголемена картинката спрямо екрана (картинката
-        за OCR е уголемена 2 пъти - виж OCR_UPSCALE в core/capture.py).
+        scale: how many times the image is upscaled relative to the screen
+        (the OCR image is upscaled 2x - see OCR_UPSCALE in core/capture.py).
         """
         if image is None or image.size == 0:
             return None
@@ -65,7 +65,7 @@ class FontSizeDetector:
         return int(round(min(MAX_FONT_SIZE, max(MIN_FONT_SIZE, size))))
 
     def _median_word_height(self, gray, scale):
-        """Медианна височина на разпознатите думи (Tesseract), в пиксели на екрана."""
+        """Median height of the recognized words (Tesseract), in screen pixels."""
         try:
             data = pytesseract.image_to_data(
                 gray, lang=self.ocr_lang, config="--oem 3 --psm 6", output_type=Output.DICT
@@ -76,7 +76,7 @@ class FontSizeDetector:
         heights = [
             data["height"][i] / scale
             for i in range(len(data["text"]))
-            if data["level"][i] == 5  # дума
+            if data["level"][i] == 5  # word
             and (data["text"][i] or "").strip()
             and float(data["conf"][i]) > MIN_WORD_CONFIDENCE
             and data["height"][i] / scale >= 4
@@ -84,12 +84,12 @@ class FontSizeDetector:
         return float(np.median(heights)) if heights else None
 
     def _median_blob_height(self, gray, scale):
-        """Медианна височина на петната текст (OpenCV), в пиксели на екрана - виж бележката горе."""
+        """Median height of the text blobs (OpenCV), in screen pixels - see the note above."""
         try:
-            text_white = gray if np.mean(gray) < 127 else 255 - gray  # текстът - светъл върху тъмно
-            mask = (text_white > 0).astype(np.uint8)  # с ореола от уголемяването (не бинаризираме наново)
+            text_white = gray if np.mean(gray) < 127 else 255 - gray  # text - light on dark
+            mask = (text_white > 0).astype(np.uint8)  # with the upscaling halo (we don't re-binarize)
             count, _, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
-            min_area = 4 * scale * scale  # без шум и точици
+            min_area = 4 * scale * scale  # skip noise and dots
             heights = np.array([
                 stats[i, cv2.CC_STAT_HEIGHT] for i in range(1, count)
                 if stats[i, cv2.CC_STAT_AREA] >= min_area
@@ -97,7 +97,7 @@ class FontSizeDetector:
             if len(heights) == 0:
                 return None
             median = np.median(heights)
-            # без запетаи/точки (много ниски) и рамки/линии (много високи)
+            # skip commas/periods (very short) and frames/lines (very tall)
             typical = heights[(heights >= median * 0.5) & (heights <= median * 2.5)]
             return float(np.median(typical)) if len(typical) else None
         except Exception as e:

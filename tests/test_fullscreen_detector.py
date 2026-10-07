@@ -12,7 +12,7 @@ class _Completed:
 
 class FullscreenCheckTest(unittest.TestCase):
     def setUp(self):
-        # всеки тест започва с празен кеш и наличен xprop
+        # each test starts with an empty cache and xprop available
         for attr, value in (("_cached_at", 0.0), ("_cached_active", False), ("_xprop_available", True)):
             patcher = mock.patch.object(FullscreenDetector, attr, value)
             patcher.start()
@@ -37,7 +37,7 @@ class FullscreenCheckTest(unittest.TestCase):
             self.assertFalse(FullscreenDetector.is_fullscreen_application_active())
 
     def test_result_is_shared_and_cached(self):
-        """Няколко прозореца в една и съща секунда - xprop се пуска само веднъж (2 извиквания)."""
+        """Several windows within the same second - xprop runs only once (2 calls)."""
         with self._xprop(True) as run:
             for _ in range(5):
                 FullscreenDetector.is_fullscreen_application_active()

@@ -1,13 +1,13 @@
 """
-Заместители за библиотеки, които липсват в текущата среда.
+Stubs for libraries missing from the current environment.
 
-Подменят се САМО ако истинската библиотека не може да се импортира -
-ако е инсталирана, тестовете ползват нея. С OVERLINGO_TEST_STUBS=1 се
-подменят винаги (GitHub Actions): тестовете проверяват логиката, а
-истинските Qt/pynput/звук/мрежа на машина без екран могат да увиснат. Заместителят приема всякакви
-атрибути и извиквания и не прави нищо - достатъчно, за да се импортират
-модулите на проекта (напр. `class TranslationThread(QThread)`), без да
-се изпълнява реален интерфейс, звук или мрежа.
+They are substituted ONLY if the real library can't be imported -
+if it is installed, the tests use it. With OVERLINGO_TEST_STUBS=1 they
+are always substituted (GitHub Actions): the tests check logic, while
+real Qt/pynput/audio/network can hang on a headless machine. A stub accepts
+any attribute access and call and does nothing - enough to import the
+project's modules (e.g. `class TranslationThread(QThread)`) without
+running a real UI, audio or network.
 """
 
 import importlib
@@ -38,7 +38,7 @@ def _stub_module(name):
     return module
 
 
-# Пакет -> подмодули, които проектът импортира.
+# Package -> submodules the project imports.
 _OPTIONAL = {
     "PyQt5": ["PyQt5.QtCore", "PyQt5.QtGui", "PyQt5.QtWidgets", "PyQt5.QtNetwork"],
     "pygame": [],

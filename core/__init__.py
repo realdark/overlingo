@@ -1,7 +1,7 @@
 """
-Логика без интерфейс: превод, OCR, настройки, история, hotkey-и и т.н.
+UI-independent logic: translation, OCR, settings, history, hotkeys, etc.
 
-Модулите се внасят поотделно (from core.translations import ...). Тук
-нарочно няма списък с "удобни" импорти - не се ползваше, остаряваше при
-всеки нов модул и караше всяко "import core.нещо" да зарежда всичко.
+Modules are imported individually (from core.translations import ...). There
+is deliberately no list of "convenience" imports here - it went unused, went stale
+with every new module, and made every "import core.something" load everything.
 """

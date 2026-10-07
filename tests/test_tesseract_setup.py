@@ -36,7 +36,7 @@ class ConfigureTesseractTest(unittest.TestCase):
 
         with self._paths([self.root / "other" / "tesseract", binary]):
             self.assertEqual(tesseract_setup.configure_tesseract(), binary)
-            tesseract_setup.configure_tesseract()  # "Провери отново" - не бива да трупа PATH
+            tesseract_setup.configure_tesseract()  # "Check again" - must not keep growing PATH
 
         self.assertEqual(os.environ["TESSDATA_PREFIX"], str(tessdata))
         self.assertEqual(os.environ["PATH"].split(os.pathsep).count(str(binary.parent)), 1)
