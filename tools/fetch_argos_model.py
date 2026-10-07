@@ -11,6 +11,10 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Конзолата на Windows (и логовете в GitHub Actions) често не е UTF-8 -
+# без това българският текст гърми с UnicodeEncodeError.
+if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
 
 import requests  # noqa: E402
 

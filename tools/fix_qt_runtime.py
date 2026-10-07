@@ -24,6 +24,11 @@ import os
 import sys
 from pathlib import Path
 
+# Конзолата на Windows (и логовете в GitHub Actions) често не е UTF-8 -
+# без това българският текст гърми с UnicodeEncodeError.
+if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(errors="replace")
+
 RUNTIME_DLLS = ("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "msvcp140_atomic_wait.dll",
                 "msvcp140_codecvt_ids.dll", "vcruntime140.dll", "vcruntime140_1.dll", "concrt140.dll")
 

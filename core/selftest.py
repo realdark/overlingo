@@ -71,6 +71,8 @@ def _arg_value(argv, name):
 
 
 def run_self_test(argv):
+    if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="replace")  # конзола без UTF-8 - без UnicodeEncodeError
     from utils.config import DATA_DIR
 
     report = _Report(_arg_value(argv, "--log") or DATA_DIR / "selftest.log")

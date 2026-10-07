@@ -20,6 +20,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # Python пише UTF-8 в логовете и на Windows (иначе българският текст гърми).
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: utf-8
+
 jobs:
   tests:
     name: Unit tests
