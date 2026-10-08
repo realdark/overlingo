@@ -24,7 +24,13 @@ class AudioThread(QThread):
         
     def stop(self):
         self._stop_flag = True
-        pygame.mixer.music.stop()
+        # Stop can come before playback has started (the audio is still being
+        # downloaded) - then the mixer isn't initialized yet and stop() would raise.
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+        except pygame.error as e:
+            logger.warning(f"Could not stop playback: {e}")
         self.cleanup_temp_file()
         
     def cleanup_temp_file(self):
@@ -61,6 +67,8 @@ class AudioThread(QThread):
                 self.no_internet_signal.emit()
                 return
             path = await self._download_audio()
+            if self._stop_flag:
+                return  # stopped while downloading - don't start playing
             self._play_audio_blocking(path)
         except Exception as e:
             logger.error(f"Audio playback error: {e}", exc_info=True)

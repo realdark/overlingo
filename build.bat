@@ -67,6 +67,10 @@ pyinstaller --onedir --noconsole ^
   --hidden-import=PyQt5.QtWidgets ^
   --hidden-import=PyQt5.QtNetwork ^
   --hidden-import=PyQt5.QtTextToSpeech ^
+  --hidden-import=win32com.client ^
+  --hidden-import=win32com.client.dynamic ^
+  --hidden-import=pythoncom ^
+  --hidden-import=pywintypes ^
   --hidden-import=cv2 ^
   --hidden-import=numpy ^
   --hidden-import=pynput ^

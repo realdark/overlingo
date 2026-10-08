@@ -25,8 +25,9 @@ translation.
 - Choose and download OCR languages right from the app (Settings →
   "Download language", fetches from `tessdata_fast`)
 - Reading translations aloud **offline with the computer's own voices** (the
-  default - Qt TextToSpeech: SAPI on Windows, the system voices on macOS,
-  speech-dispatcher on Linux) or online with the natural **Microsoft Edge**
+  default - SAPI on Windows, including the voices added in Settings → Speech
+  / Narrator; the system voices on macOS and speech-dispatcher on Linux via
+  Qt TextToSpeech) or online with the natural **Microsoft Edge**
   voices (edge-tts; picked automatically by the translation language, or from
   the full list). Without a system voice for the language, the online voice
   reads instead when there is internet
@@ -96,10 +97,14 @@ languages, or can be downloaded beforehand from Settings → "Translation" tab �
 the program.
 
 Reading aloud uses the voices installed in the operating system by default
-(no extra package - Qt TextToSpeech is part of PyQt5). On Linux it needs
+(on Windows through SAPI with pywin32, which also sees the voices added in
+Settings → Time & language → Speech / Language → "Text-to-speech"; on macOS
+and Linux through Qt TextToSpeech, part of PyQt5). On Linux it needs
 speech-dispatcher (e.g. `sudo apt install speech-dispatcher espeak-ng`).
 Missing languages can be added in the system speech settings; otherwise the
-online Microsoft Edge voice is used when there is internet. When moving to a new version, copy the
+online Microsoft Edge voice is used when there is internet.
+
+When moving to a new version, copy the
 `argos-models` folder into the new one so you don't have to download the
 models again.
 
@@ -136,7 +141,7 @@ core/                       Logic without UI (testable)
   retry.py                  Retry with exponential backoff
   network.py                Internet connection check
   audio_handler.py          Online text-to-speech (edge-tts) in a background thread
-  system_tts.py             Offline text-to-speech with the computer's voices (Qt TextToSpeech)
+  system_tts.py             Offline text-to-speech with the computer's voices (SAPI / Qt TextToSpeech)
   audio_playback.py         Play/stop for all play buttons, engine choice and online fallback
   localization.py           Loading the texts from assets/locales
   argos.py                  Offline translation (the Argos Translate models)

@@ -22,8 +22,9 @@
 - Избор и изтегляне на OCR езици направо от приложението (Settings →
   "Свали език", тегли от `tessdata_fast`)
 - Четене на превода на глас **без интернет с гласовете на компютъра** (по
-  подразбиране - Qt TextToSpeech: SAPI на Windows, системните гласове на
-  macOS, speech-dispatcher на Linux) или онлайн с естествените гласове на
+  подразбиране - SAPI на Windows, включително гласовете, добавени от
+  Settings → Speech / Narrator; системните гласове на macOS и
+  speech-dispatcher на Linux чрез Qt TextToSpeech) или онлайн с естествените гласове на
   **Microsoft Edge** (edge-tts; избират се автоматично според езика на
   превода или от пълния списък). Ако на компютъра няма глас за езика, чете
   онлайн гласът, когато има интернет
@@ -90,11 +91,13 @@ tessdata папка, откривана автоматично).
 превод без интернет“; отиват в папка `argos-models` до програмата.
 
 Четенето на глас по подразбиране ползва гласовете, инсталирани в
-операционната система (без допълнителен пакет - Qt TextToSpeech е част от
-PyQt5). На Linux е нужен speech-dispatcher (напр.
+операционната система (на Windows чрез SAPI с pywin32, който вижда и
+гласовете, добавени от Settings → Time & language → Speech / Language →
+"Text-to-speech"; на macOS и Linux чрез Qt TextToSpeech, част от PyQt5). На Linux е нужен speech-dispatcher (напр.
 `sudo apt install speech-dispatcher espeak-ng`). Липсващи езици се добавят
 от системните настройки за реч; иначе чете онлайн гласът на Microsoft
 Edge, когато има интернет.
+
 При преминаване към нова версия копирай папката `argos-models` в новата,
 за да не сваляш моделите отново.
 
@@ -131,7 +134,7 @@ core/                       Логика без интерфейс (тества
   retry.py                  Retry с exponential backoff
   network.py                Проверка за интернет връзка
   audio_handler.py          Онлайн text-to-speech (edge-tts) чрез фонова нишка
-  system_tts.py             Четене без интернет с гласовете на компютъра (Qt TextToSpeech)
+  system_tts.py             Четене без интернет с гласовете на компютъра (SAPI / Qt TextToSpeech)
   audio_playback.py         Play/stop за всички бутони, избор на глас и онлайн резерва
   localization.py           Зареждане на текстовете от assets/locales
   argos.py                  Превод без интернет (моделите на Argos Translate)

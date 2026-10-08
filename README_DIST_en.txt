@@ -107,8 +107,12 @@ used automatically.
 Reading aloud uses the voices installed in your operating system. If
 there is none for a language, the online Microsoft Edge voice reads
 instead (internet needed) - or add a voice in the system speech
-settings (Windows: Settings -> Time & language -> Speech). On Linux,
-install speech-dispatcher: sudo apt install speech-dispatcher espeak-ng They are kept
+settings (Windows: Settings -> Time & language -> Speech, or Language ->
+your language -> "Text-to-speech"; voices added for Narrator work too,
+just restart Overlingo). On Linux, install speech-dispatcher:
+sudo apt install speech-dispatcher espeak-ng
+
+The offline translation models are kept
 in the "argos-models" folder next to the program - copy it over when
 you move to a new version so you don't download them again.
 

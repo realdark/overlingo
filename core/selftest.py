@@ -70,6 +70,36 @@ def _arg_value(argv, name):
     return None
 
 
+def _windows_tts(folder):
+    """
+    Windows reads through SAPI (pywin32) - it must be in the build. The runner
+    has no sound card, so the text is "read" into a .wav file instead.
+    """
+    from core.system_tts import _SapiEngine, sapi_rate
+    from win32com.client import dynamic
+
+    engine = _SapiEngine()
+    if not engine.voices:
+        return ("SKIP", "SAPI works, but this machine has no voices")
+    language, name, token = engine.voices[0]
+    wav = Path(folder) / "selftest-tts.wav"
+    stream = dynamic.Dispatch("SAPI.SpFileStream")
+    stream.Open(str(wav), 3)  # SSFMCreateForWrite
+    try:
+        engine.voice.AudioOutputStream = stream
+        engine.voice.Voice = token
+        engine.voice.Rate = sapi_rate(1.0)
+        engine.voice.Speak("Hello world. This is a test.", 0)  # synchronous
+    finally:
+        stream.Close()
+    size = wav.stat().st_size
+    wav.unlink()
+    if size < 10_000:
+        raise RuntimeError(f"the speech file is almost empty ({size} bytes)")
+    voices = ", ".join(f"{n} ({l or '?'})" for l, n, _ in engine.voices[:8])
+    return f"SAPI, {len(engine.voices)} voice(s): {voices}; {name} wrote {size} bytes"
+
+
 def run_self_test(argv):
     if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="replace")  # non-UTF-8 console - avoid UnicodeEncodeError
@@ -140,6 +170,8 @@ def run_self_test(argv):
     report.run("argos-libraries", argos_libraries)
 
     def system_tts():
+        if sys.platform == "win32":
+            return _windows_tts(report.log_path.parent)
         if "app" not in state:
             return ("SKIP", "no Qt")
         from PyQt5 import QtTextToSpeech  # must be in the build (offline reading)

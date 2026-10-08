@@ -12,6 +12,8 @@ edge-tts>=6.0.0
 pygame>=2.0.0
 requests>=2.25.0
 pynput>=1.7.0
+# Windows: offline voices through SAPI, including the OneCore ones (core/system_tts.py)
+pywin32>=306; sys_platform == "win32"
 # Offline translation (Argos Translate models, core/argos.py)
 ctranslate2>=4.0,<5
 sentencepiece>=0.2.0

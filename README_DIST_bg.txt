@@ -104,8 +104,12 @@ Translate (безплатен) и DeepL/Microsoft (собствен ключ) с
 Четенето на глас ползва гласовете, инсталирани в операционната система.
 Ако за даден език няма, чете онлайн гласът на Microsoft Edge (нужен е
 интернет) - или добави глас от системните настройки за реч (Windows:
-Settings -> Time & language -> Speech). На Linux инсталирай
-speech-dispatcher: sudo apt install speech-dispatcher espeak-ng Пазят се в папка
+Settings -> Time & language -> Speech, или Language -> езика ->
+„Text-to-speech“; работят и гласовете, добавени за Narrator - само
+рестартирай Overlingo). На Linux инсталирай speech-dispatcher:
+sudo apt install speech-dispatcher espeak-ng
+
+Моделите за превод без интернет се пазят в папка
 „argos-models“ до програмата - при нова версия я копирай, за да не
 сваляш моделите отново.
 
