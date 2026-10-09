@@ -154,3 +154,20 @@ class HelpSectionTest(unittest.TestCase):
         self.assertIn("<h3>Audio</h3>", html)
         self.assertEqual(html.count("<li"), 2)
         self.assertIn("&lt;b&gt;", html)
+
+
+class NoUntranslatedButtonsTest(unittest.TestCase):
+    """Qt's standard buttons (OK, Close, Yes...) stay in English - we don't load Qt's translations."""
+
+    def test_no_standard_message_box_buttons(self):
+        pattern = re.compile(
+            r"QMessageBox\.(information|warning|critical|question)\(|setStandardButtons|"
+            r"QMessageBox\.(Ok|Close|Yes|No|Cancel)\b|QDialogButtonBox\.(Ok|Close|Cancel|Save)\b"
+        )
+        root = Path(__file__).resolve().parent.parent
+        offenders = []
+        for path in sorted((root / "ui").glob("*.py")) + sorted((root / "core").glob("*.py")):
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if pattern.search(line):
+                    offenders.append(f"{path.name}:{number}: {line.strip()}")
+        self.assertEqual(offenders, [], "use ui.dialogs.show_message / addButton(i18n text) instead")

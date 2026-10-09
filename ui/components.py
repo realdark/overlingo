@@ -12,8 +12,9 @@ def _show_audio_notice(parent, i18n, key):
     Messages from the playback (see AudioPlaybackToggle): no voice / no internet
     as a warning; "reading with the online voice" only as information.
     """
-    show = QtWidgets.QMessageBox.information if key == "tts_fallback_online" else QtWidgets.QMessageBox.warning
-    show(parent, i18n.tr("warning_title"), i18n.tr(key))
+    from ui.dialogs import show_message  # here - ui.dialogs is not needed until a message is shown
+    kind = "info" if key == "tts_fallback_online" else "warning"
+    show_message(parent, i18n, i18n.tr("warning_title"), i18n.tr(key), kind)
 
 
 class OverlayPanel(QtWidgets.QWidget):

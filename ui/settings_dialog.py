@@ -15,6 +15,7 @@ from core.audio_handler import EdgeVoicesThread
 from core.system_tts import SystemSpeech
 from core.hotkey_manager import HOTKEY_SUPPORTED
 from utils.logging_setup import logger
+from ui.dialogs import show_message
 
 TEXT_COLOR_CHOICES = {
     "Бял": "#FFFFFF",
@@ -483,7 +484,7 @@ class SettingsDialog(QtWidgets.QDialog):
             # Pop-up instead of inline text - same style as the other
             # errors in the dialog.
             status_label.setText("")
-            QtWidgets.QMessageBox.critical(self, self.i18n.tr("warning_title"), message)
+            show_message(self, self.i18n, self.i18n.tr("warning_title"), message, "error")
 
     def _handle_download_tessdata(self):
         """Downloads .traineddata from tessdata_fast and refreshes the OCR language list on success."""
@@ -493,8 +494,7 @@ class SettingsDialog(QtWidgets.QDialog):
 
         tessdata_dir = get_tessdata_dir()
         if tessdata_dir is None:
-            QtWidgets.QMessageBox.critical(
-                self, self.i18n.tr("warning_title"), self.i18n.tr("tessdata_dir_not_found")
+            show_message(self, self.i18n, self.i18n.tr("warning_title"), self.i18n.tr("tessdata_dir_not_found"), "error"
             )
             return
         dest = tessdata_dir / f"{lang_code}.traineddata"
@@ -554,8 +554,7 @@ class SettingsDialog(QtWidgets.QDialog):
     def _handle_download_argos(self):
         """Downloads the offline translation models for the current languages (direct or via English)."""
         if not argos.libraries_available():
-            QtWidgets.QMessageBox.critical(
-                self, self.i18n.tr("warning_title"), self.i18n.tr("argos_not_installed")
+            show_message(self, self.i18n, self.i18n.tr("warning_title"), self.i18n.tr("argos_not_installed"), "error"
             )
             return
         if ArgosDownloadThread.is_busy():
@@ -565,8 +564,7 @@ class SettingsDialog(QtWidgets.QDialog):
             return
         source, target = self._argos_languages()
         if source == target:
-            QtWidgets.QMessageBox.information(
-                self, self.i18n.tr("warning_title"), self.i18n.tr("argos_same_language")
+            show_message(self, self.i18n, self.i18n.tr("warning_title"), self.i18n.tr("argos_same_language"), "info"
             )
             return
         self._argos_thread = ArgosDownloadThread(source, target)
@@ -614,8 +612,7 @@ class SettingsDialog(QtWidgets.QDialog):
             self.settings_manager.validate(new_settings, previous=self.current)
         except SettingsValidationError as e:
             detail = f"\n{e.detail}" if e.detail else ""
-            QtWidgets.QMessageBox.critical(
-                self, self.i18n.tr("warning_title"), f"{self.i18n.tr(e.message_key)}{detail}"
+            show_message(self, self.i18n, self.i18n.tr("warning_title"), f"{self.i18n.tr(e.message_key)}{detail}", "error"
             )
             return
 

@@ -20,7 +20,7 @@ from core.capture import capture_full_screen_qimage, warm_up
 from ui.components import SelectionWindow, WindowDragFilter, SecondaryOverlay, OverlayPanel
 from ui.settings_dialog import SettingsDialog
 from ui.history_window import HistoryWindow
-from ui.dialogs import show_about, show_help, show_tesseract_missing, show_update_result
+from ui.dialogs import show_about, show_help, show_message, show_tesseract_missing, show_update_result
 from core.tesseract_setup import configure_tesseract
 from core.update_check import UpdateCheckThread
 from ui.text_translate_window import TextTranslateWindow
@@ -668,9 +668,7 @@ class MainWindow(QtWidgets.QWidget):
             # the other errors, here the user probably wants to know
             # right away (not just a line in the text panel), because the fix
             # is usually "increase the timeout in Settings", not just "try again".
-            QtWidgets.QMessageBox.warning(
-                self, self.i18n.tr("warning_title"), self.i18n.tr("translation_timeout")
-            )
+            show_message(self, self.i18n, self.i18n.tr("warning_title"), self.i18n.tr("translation_timeout"))
         self._reshow_overlay_if_pending()
 
     def offer_argos_download(self, pair_text, then=None, parent=None):
@@ -861,8 +859,8 @@ class MainWindow(QtWidgets.QWidget):
         the window is still being created.
         """
         logger.warning(f"Hotkey could not be activated: {error}")
-        QtCore.QTimer.singleShot(0, lambda: QtWidgets.QMessageBox.warning(
-            self, self.i18n.tr("warning_title"), f"{self.i18n.tr('hotkey_failed')}\n\n{error}"
+        QtCore.QTimer.singleShot(0, lambda: show_message(
+            self, self.i18n, self.i18n.tr("warning_title"), f"{self.i18n.tr('hotkey_failed')}\n\n{error}"
         ))
 
     # ------------------------------------------------------------------

@@ -35,6 +35,25 @@ HELP_SECTION_KEYS = (  # (title, text)
 )
 
 
+# Qt's standard buttons (OK, Close...) take their text from Qt's own
+# translations, which we don't load - they stayed in English with the
+# Bulgarian UI. So every button is added with our own text.
+
+def show_message(parent, i18n, title, text, kind="warning"):
+    """A simple message with a translated OK button. kind: "info", "warning" or "error"."""
+    icons = {
+        "info": QtWidgets.QMessageBox.Information,
+        "warning": QtWidgets.QMessageBox.Warning,
+        "error": QtWidgets.QMessageBox.Critical,
+    }
+    msg = QtWidgets.QMessageBox(parent)
+    msg.setIcon(icons.get(kind, QtWidgets.QMessageBox.Warning))
+    msg.setWindowTitle(title)
+    msg.setText(text)
+    msg.setDefaultButton(msg.addButton(i18n.tr("ok_button"), QtWidgets.QMessageBox.AcceptRole))
+    msg.exec_()
+
+
 def _rich_message(parent, title, html, icon=QtWidgets.QMessageBox.Information):
     msg = QtWidgets.QMessageBox(parent)
     msg.setWindowTitle(title)
@@ -60,7 +79,7 @@ def show_about(parent, i18n):
     <p>{t('about_copyright')}</p>
     """
     msg = _rich_message(parent, t("about_title"), html)
-    msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
+    msg.addButton(t("close_button"), QtWidgets.QMessageBox.RejectRole)
     msg.exec_()
 
 
@@ -114,7 +133,7 @@ class HelpDialog(QtWidgets.QDialog):
         layout.addLayout(panes, stretch=1)
 
         buttons = QtWidgets.QDialogButtonBox()
-        close = buttons.addButton(t("help_close"), QtWidgets.QDialogButtonBox.RejectRole)
+        close = buttons.addButton(t("close_button"), QtWidgets.QDialogButtonBox.RejectRole)
         close.setAutoDefault(False)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -156,17 +175,17 @@ def show_tesseract_missing(parent, i18n):
         )
         retry_btn = msg.addButton(t("tesseract_check_again"), QtWidgets.QMessageBox.ActionRole)
         copy_btn = msg.addButton(t("tesseract_copy_command"), QtWidgets.QMessageBox.ActionRole)
-        msg.addButton(QtWidgets.QMessageBox.Ok)
+        msg.addButton(t("close_button"), QtWidgets.QMessageBox.RejectRole)
         msg.exec_()
         clicked = msg.clickedButton()
 
         if clicked == retry_btn:
             if configure_tesseract():
-                QtWidgets.QMessageBox.information(parent, t("tesseract_missing_title"), t("tesseract_found_now"))
+                show_message(parent, i18n, t("tesseract_missing_title"), t("tesseract_found_now"), "info")
                 return True
         elif clicked == copy_btn:
             QtWidgets.QApplication.clipboard().setText(command)
-            QtWidgets.QMessageBox.information(parent, t("tesseract_missing_title"), t("tesseract_command_copied"))
+            show_message(parent, i18n, t("tesseract_missing_title"), t("tesseract_command_copied"), "info")
         else:
             return False
 
@@ -192,7 +211,7 @@ def show_update_result(parent, i18n, result):
     download_btn = None
     if result.status == STATUS_NEWER:
         download_btn = msg.addButton(t("update_download_button"), QtWidgets.QMessageBox.AcceptRole)
-    msg.addButton(QtWidgets.QMessageBox.Ok)
+    msg.addButton(t("close_button"), QtWidgets.QMessageBox.RejectRole)
     msg.exec_()
     if download_btn is not None and msg.clickedButton() == download_btn:
         QtGui.QDesktopServices.openUrl(QtCore.QUrl(result.url))
