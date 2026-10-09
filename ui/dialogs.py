@@ -5,6 +5,8 @@ Moved out of ui/main_window.py - they are self-contained and depend only
 on the texts (i18n), not on the main window's state.
 """
 
+import html
+
 from utils.imports import QtWidgets, QtCore, QtGui
 from utils.version import APP_VERSION
 from core.tesseract_setup import configure_tesseract, install_hint, terminal_hint_key
@@ -26,8 +28,10 @@ HELP_SECTION_KEYS = (  # (title, text)
     ("help_workflow_title", "help_workflow_body"),
     ("help_interface_title", "help_interface_body"),
     ("help_translation_title", "help_translation_body"),
+    ("help_appearance_title", "help_appearance_body"),
     ("help_audio_title", "help_audio_body"),
     ("help_hotkey_title", "help_hotkey_body"),
+    ("help_files_title", "help_files_body"),
 )
 
 
@@ -60,14 +64,73 @@ def show_about(parent, i18n):
     msg.exec_()
 
 
+def help_section_html(title, body):
+    """One help topic as HTML: a heading and the text's lines as bullet points."""
+    items = "".join(f"<li style='margin-bottom:6px'>{html.escape(line)}</li>" for line in body.splitlines() if line.strip())
+    return f"<h3>{html.escape(title)}</h3><ul>{items}</ul>"
+
+
+class HelpDialog(QtWidgets.QDialog):
+    """
+    Help: the topics in a list on the left, the chosen one on the right -
+    instead of one tall message box with all the text at once.
+    """
+
+    def __init__(self, parent, i18n):
+        super().__init__(parent, QtCore.Qt.WindowTitleHint | QtCore.Qt.WindowCloseButtonHint)
+        t = i18n.tr
+        self.setWindowTitle(t("help_title"))
+        self.resize(760, 460)
+        self.setMinimumSize(560, 340)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        intro = QtWidgets.QLabel(t("help_intro"))
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        panes = QtWidgets.QHBoxLayout()
+        panes.setSpacing(10)
+        self.topics = QtWidgets.QListWidget()
+        self.topics.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+        self.topics.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.text = QtWidgets.QTextBrowser()
+        self.text.setOpenExternalLinks(True)
+        self.text.document().setIndentWidth(18)  # bullets close to the edge (Qt default: 40 px)
+        self.text.document().setDocumentMargin(10)
+        # Text colors follow the dark theme (assets/theme.qss); headings a bit brighter.
+        self.text.document().setDefaultStyleSheet("h3 { color: #ffffff; } a { color: #60a5fa; }")
+        self._pages = []
+        for title_key, body_key in HELP_SECTION_KEYS:
+            self.topics.addItem(t(title_key))
+            self._pages.append(help_section_html(t(title_key), t(body_key)))
+        # Fixed width from the longest title: the theme adds padding to the list
+        # (4 px) and to each item (6 px) that sizeHint doesn't know about -
+        # without the extra room a horizontal scrollbar appeared under the list.
+        metrics = self.topics.fontMetrics()
+        longest = max(metrics.horizontalAdvance(t(title_key)) for title_key, _ in HELP_SECTION_KEYS)
+        self.topics.setFixedWidth(longest + 48)
+        panes.addWidget(self.topics)
+        panes.addWidget(self.text, stretch=1)
+        layout.addLayout(panes, stretch=1)
+
+        buttons = QtWidgets.QDialogButtonBox()
+        close = buttons.addButton(t("help_close"), QtWidgets.QDialogButtonBox.RejectRole)
+        close.setAutoDefault(False)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        self.topics.currentRowChanged.connect(self._show_topic)
+        self.topics.setCurrentRow(0)
+        self.topics.setFocus()
+
+    def _show_topic(self, row):
+        if 0 <= row < len(self._pages):
+            self.text.setHtml(self._pages[row])
+
+
 def show_help(parent, i18n):
     """The short user guide dialog."""
-    t = i18n.tr
-    sections = "".join(f"<p><b>{t(title)}</b></p><p>{t(body)}</p>" for title, body in HELP_SECTION_KEYS)
-    html = f"<h3>{t('help_title')}</h3><p>{t('help_intro')}</p>{sections}"
-    msg = _rich_message(parent, t("help_title"), html)
-    msg.setStandardButtons(QtWidgets.QMessageBox.Ok)
-    msg.exec_()
+    HelpDialog(parent, i18n).exec_()
 
 
 def show_tesseract_missing(parent, i18n):

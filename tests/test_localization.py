@@ -145,3 +145,12 @@ class VersionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HelpSectionTest(unittest.TestCase):
+    def test_lines_become_bullets_and_are_escaped(self):
+        from ui.dialogs import help_section_html
+        html = help_section_html("Audio", "First line\n\nSecond <b>line</b>\n")
+        self.assertIn("<h3>Audio</h3>", html)
+        self.assertEqual(html.count("<li"), 2)
+        self.assertIn("&lt;b&gt;", html)

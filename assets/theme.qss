@@ -247,6 +247,7 @@ QDialog QPlainTextEdit:read-only {
 }
 QDialog QListWidget {
     alternate-background-color: #303030;
+    outline: 0;  /* no dotted focus frame around the current item */
 }
 QDialog QListWidget::item {
     padding: 6px;
@@ -254,6 +255,58 @@ QDialog QListWidget::item {
 QDialog QListWidget::item:selected {
     background-color: #3b82f6;
     color: white;
+}
+QDialog QListWidget::item:hover:!selected {
+    background-color: #35363a;
+}
+
+/* --- Help: topic text (QTextBrowser) --- */
+QDialog QTextBrowser {
+    background-color: #242424;
+    color: #e5e7eb;
+    border: 1px solid rgba(90, 90, 90, 150);
+    border-radius: 5px;
+    font-size: 13px;
+    selection-background-color: #3b82f6;
+}
+
+/* --- Scrollbars in dialogs (the light system ones stand out on the dark theme) --- */
+QDialog QScrollBar:vertical {
+    background: transparent;
+    width: 10px;
+    margin: 2px;
+}
+QDialog QScrollBar::handle:vertical {
+    background: rgba(150, 150, 150, 110);
+    border-radius: 3px;
+    min-height: 24px;
+}
+QDialog QScrollBar::handle:vertical:hover {
+    background: rgba(170, 170, 170, 170);
+}
+QDialog QScrollBar:horizontal {
+    background: transparent;
+    height: 10px;
+    margin: 2px;
+}
+QDialog QScrollBar::handle:horizontal {
+    background: rgba(150, 150, 150, 110);
+    border-radius: 3px;
+    min-width: 24px;
+}
+QDialog QScrollBar::add-line:horizontal,
+QDialog QScrollBar::sub-line:horizontal,
+QDialog QScrollBar::add-page:horizontal,
+QDialog QScrollBar::sub-page:horizontal {
+    background: none;
+    width: 0px;
+}
+QDialog QScrollBar::add-line:vertical,
+QDialog QScrollBar::sub-line:vertical,
+QDialog QScrollBar::add-page:vertical,
+QDialog QScrollBar::sub-page:vertical {
+    background: none;
+    height: 0px;
 }
 
 /* --- 3.0: secondary dialog button ("Restore defaults") --- */
