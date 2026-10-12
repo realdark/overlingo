@@ -208,7 +208,8 @@ class MainWindow(QtWidgets.QWidget):
         btn = self.mark_translate_btn
         btn_geo = btn.geometry()
         btn.ensurePolished()  # the font size comes from theme.qss
-        text_width = QtGui.QFontMetrics(btn.font()).horizontalAdvance(btn.text())
+        shown_text = btn.text().replace("&&", "&")  # as displayed (see update_ui_texts)
+        text_width = QtGui.QFontMetrics(btn.font()).horizontalAdvance(shown_text)
         text_right = btn_geo.center().x() + text_width // 2
         x = min(text_right + gap_after_text, btn_geo.right() - icon_size - 2)
         y = btn_geo.top() + (btn_geo.height() - icon_size) // 2
@@ -349,7 +350,10 @@ class MainWindow(QtWidgets.QWidget):
     def update_ui_texts(self):
         """The toolbar texts (at startup and when the language changes)."""
         t = self.i18n.tr
-        self.mark_translate_btn.setText(t("mark_translate_button"))
+        # "&" in a button text marks the keyboard shortcut letter (Alt+letter): Qt hides
+        # it and underlines the next character - "Select & Translate" showed as
+        # "Select _Translate" on Linux. "&&" is shown as a plain "&".
+        self.mark_translate_btn.setText(t("mark_translate_button").replace("&", "&&"))
         self._position_translation_status()
         self.clear_btn.setText(t("clear_button"))
         self.clear_btn.setToolTip(t("clear_button_tooltip"))
