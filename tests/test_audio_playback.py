@@ -99,3 +99,30 @@ class ToggleTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SharedPlaybackTest(unittest.TestCase):
+    def setUp(self):
+        patcher = mock.patch.object(audio_playback, "SystemSpeech", return_value=_FakeSpeech(True))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_starting_one_button_stops_the_other(self):
+        first = AudioPlaybackToggle(set_icon=lambda _: None)
+        second = AudioPlaybackToggle(set_icon=lambda _: None)
+        first.is_playing = lambda: True
+        first.stop = mock.Mock()
+        second.start("Hallo", AudioOptions("system", "", 1.0, "DE"))
+        first.stop.assert_called_once()
+
+    def test_stop_does_not_wait_for_a_downloading_thread(self):
+        toggle = AudioPlaybackToggle(set_icon=lambda _: None)
+        thread = mock.Mock()
+        thread.isRunning.return_value = True
+        toggle.audio_thread = thread
+        toggle.stop()
+        thread.stop.assert_called_once()
+        thread.wait.assert_not_called()
+        self.assertIsNone(toggle.audio_thread)
+        self.assertIn(thread, audio_playback._finishing)
+        audio_playback._finishing.discard(thread)

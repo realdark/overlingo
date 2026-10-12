@@ -17,11 +17,21 @@ from core.hotkey_manager import HOTKEY_SUPPORTED
 from utils.logging_setup import logger
 from ui.dialogs import show_message
 
-TEXT_COLOR_CHOICES = {
-    "Бял": "#FFFFFF",
-    "Жълт": "#FFFF00",
-    "Зелен": "#00FF00",
-    "Червен": "#FF0000",
+# Downloads (voice list, OCR language, offline models) still running after their
+# Settings dialog was closed - referenced until they finish (a QThread destroyed
+# while running aborts the app).
+_running_threads = set()
+
+
+def _keep_until_finished(thread):
+    _running_threads.add(thread)
+    thread.finished.connect(lambda t=thread: _running_threads.discard(t))
+
+TEXT_COLOR_CHOICES = {  # locale key -> colour
+    "color_white": "#FFFFFF",
+    "color_yellow": "#FFFF00",
+    "color_green": "#00FF00",
+    "color_red": "#FF0000",
 }
 
 
@@ -431,6 +441,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self._voices_thread.failed.connect(
             lambda e: logger.warning(f"Could not load the voice list (no network?): {e}")
         )
+        _keep_until_finished(self._voices_thread)
         self._voices_thread.start()
 
     def _on_voices_ready(self, voice_names):
@@ -465,6 +476,7 @@ class SettingsDialog(QtWidgets.QDialog):
         """
         download_btn.setEnabled(False)
         status_label.setText(self.i18n.tr(downloading_key))
+        _keep_until_finished(thread)
         thread.start()
 
     def _finish_download(self, status_label, download_btn, success, message_key, params, done_key,

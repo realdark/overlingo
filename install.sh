@@ -37,13 +37,18 @@ chmod +x "$DIR/overlingo"
 # menu starts the app from $HOME (the app no longer depends on this,
 # but it is safer).
 # $2 - the icon: full path (for the in-folder launcher) or theme name (for the menu).
+# Exec= inside double quotes: the desktop-entry format needs \ " ` $ escaped
+# with a backslash and % written as %% - otherwise a folder like "100% tools"
+# or "my$stuff" breaks the launcher.
+EXEC_PATH="$(printf '%s' "$DIR/overlingo" | sed -e 's/[\\"`$]/\\&/g' -e 's/%/%%/g')"
+
 write_desktop_file() {
     cat > "$1" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Overlingo
 Comment=Screen OCR + translation
-Exec="$DIR/overlingo"
+Exec="$EXEC_PATH"
 Path=$DIR
 Icon=$2
 Terminal=false

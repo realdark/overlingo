@@ -44,11 +44,16 @@ class SelectionWindow(QtWidgets.QWidget):
     # Escape or right click closes the window without a signal - nothing is translated.
     selection_made = QtCore.pyqtSignal(QtCore.QRect)
 
-    def __init__(self, screenshot, hint_text=""):
+    def __init__(self, screenshot, hint_text="", screen=None):
         super().__init__()
         self.screenshot = screenshot
         self.hint_text = hint_text
         self.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint)
+        if screen is not None:
+            # Full screen on THIS monitor (the one the screenshot is from).
+            self.create()
+            self.windowHandle().setScreen(screen)
+            self.setGeometry(screen.geometry())
         self.setWindowState(self.windowState() | QtCore.Qt.WindowFullScreen)
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
         self.setCursor(QtCore.Qt.CrossCursor)
@@ -76,7 +81,9 @@ class SelectionWindow(QtWidgets.QWidget):
 
     def paintEvent(self, event):
         qp = QtGui.QPainter(self)
-        qp.drawImage(0, 0, self.screenshot)
+        # The screenshot is in real pixels; with display scaling the window is smaller
+        # in Qt units - drawn into the whole window it matches the screen exactly.
+        qp.drawImage(self.rect(), self.screenshot)
         if self.selecting:
             qp.setPen(QtGui.QPen(QtGui.QColor(0, 255, 0), 2))
             qp.setBrush(QtGui.QColor(0, 255, 0, 50))
@@ -118,7 +125,8 @@ class SelectionWindow(QtWidgets.QWidget):
 
     def mouseReleaseEvent(self, event):
         if event.button() == QtCore.Qt.LeftButton and self.selecting:
-            rect = QtCore.QRect(self.begin, self.end).normalized()
+            # Global coordinates - the window may be on a monitor that doesn't start at (0, 0).
+            rect = QtCore.QRect(self.mapToGlobal(self.begin), self.mapToGlobal(self.end)).normalized()
             self.selection_made.emit(rect)
             self.close()
         super().mouseReleaseEvent(event)
@@ -269,17 +277,26 @@ class SecondaryOverlay(QtWidgets.QFrame):
         required_height = text_height + buttons_height + margins
         required_height = max(min_height, required_height)  # No less than min_height
 
+        # The screen the selected area is on (not always the primary one).
+        screen = (QtWidgets.QApplication.screenAt(self.original_rect.center())
+                  or QtWidgets.QApplication.primaryScreen())
+        available = screen.availableGeometry()
         # Maximum height (60% of the screen, instead of 80%)
-        screen_height = QtWidgets.QApplication.primaryScreen().geometry().height()
-        max_height = int(screen_height * 0.6)
+        max_height = int(available.height() * 0.6)
 
         # Final height
         final_height = min(required_height, max_height)
 
+        # The overlay grows downwards from the selected area; near the bottom edge it
+        # is moved up so its buttons (at the bottom) stay on the screen.
+        y = self.original_rect.y()
+        if y + final_height > available.bottom():
+            y = max(available.top(), available.bottom() - final_height)
+
         # ✅ Resize the whole window
         self.setGeometry(
             self.original_rect.x(),
-            self.original_rect.y(),
+            y,
             self.original_rect.width(),
             final_height
         )

@@ -34,6 +34,7 @@ class TessdataDownloadThread(QThread):
 
     def run(self):
         response = None
+        tmp_path = None
         try:
             for branch in TESSDATA_FAST_BRANCHES:
                 url = TESSDATA_FAST_URL_TEMPLATE.format(branch=branch, lang=self.lang_code)
@@ -56,7 +57,10 @@ class TessdataDownloadThread(QThread):
             # directly there failed with PermissionError midway, we would
             # also lose the bytes already downloaded. This way the download
             # always succeeds, and only the last step (the move) may need rights.
-            tmp_path = Path(tempfile.gettempdir()) / f"{self.lang_code}.traineddata.part"
+            # Only the file name part of the code - a "/" (e.g. "script/Latin") would point
+            # into a folder that doesn't exist in the temp folder.
+            safe_name = self.lang_code.replace("/", "_").replace("\\", "_")
+            tmp_path = Path(tempfile.gettempdir()) / f"overlingo-{safe_name}.traineddata.part"
 
             with open(tmp_path, "wb") as f:
                 for chunk in response.iter_content(chunk_size=65536):
@@ -81,7 +85,18 @@ class TessdataDownloadThread(QThread):
                 )
 
         except requests.exceptions.RequestException as e:
+            self._remove_partial(tmp_path)
             self.finished_download.emit(False, "network_error_detail", {"error": str(e)})
         except Exception as e:
+            self._remove_partial(tmp_path)
             logger.error(f"Error downloading tessdata '{self.lang_code}': {e}", exc_info=True)
             self.finished_download.emit(False, "unexpected_error_detail", {"error": str(e)})
+
+    @staticmethod
+    def _remove_partial(tmp_path):
+        """A half-downloaded file is useless - don't leave it in the temp folder."""
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass

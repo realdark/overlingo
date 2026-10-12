@@ -68,7 +68,8 @@ jobs:
 
   build:
     name: Build ${{ matrix.name }}
-    needs: [version]
+    # The unit tests must pass first - otherwise a release went out even with a failing test.
+    needs: [version, tests]
     # On a manual run "version" is skipped - the build runs anyway.
     if: ${{ !failure() && !cancelled() }}
     strategy:
@@ -99,7 +100,7 @@ jobs:
       - name: Tesseract and system libraries (Linux)
         if: runner.os == 'Linux'
         timeout-minutes: 10
-        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y tesseract-ocr libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y tesseract-ocr libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 xvfb libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 libxcb-shape0 libxcb-xfixes0
       - name: Tesseract (Windows)
         if: runner.os == 'Windows'
         run: choco install tesseract -y --no-progress
@@ -143,7 +144,9 @@ jobs:
         if: runner.os == 'Linux'
         timeout-minutes: 10
         env:
-          QT_QPA_PLATFORM: offscreen
+          # The real X11 backend (what users get) on the virtual display - "offscreen"
+          # never checked that the xcb plugin and its libraries are in the build.
+          QT_QPA_PLATFORM: xcb
         # xvfb-run: a virtual X display, so the global hotkey check (pynput) can run.
         run: xvfb-run -a dist/overlingo/overlingo --self-test --require-argos --argos-models "$RUNNER_TEMP/argos-models" --log "$RUNNER_TEMP/selftest.log"
       - name: Self-test of the built app (macOS)
@@ -197,7 +200,7 @@ jobs:
         run: tar -xzf artifact/Overlingo-*-linux-*.tar.gz -C "$RUNNER_TEMP"
       - name: Tesseract and system libraries
         timeout-minutes: 10
-        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y tesseract-ocr libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 xvfb
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y tesseract-ocr libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 xvfb libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 libxcb-shape0 libxcb-xfixes0
       - name: Download a model for the offline translation check
         run: |
           pip install -r requirements.txt
@@ -205,7 +208,7 @@ jobs:
       - name: Self-test
         timeout-minutes: 10
         env:
-          QT_QPA_PLATFORM: offscreen
+          QT_QPA_PLATFORM: xcb
         run: xvfb-run -a "$RUNNER_TEMP/overlingo/overlingo" --self-test --require-argos --argos-models "$RUNNER_TEMP/argos-models" --log "$RUNNER_TEMP/selftest.log"
       - name: Logs when something failed
         if: failure()

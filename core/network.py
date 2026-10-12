@@ -7,7 +7,18 @@ translation (Argos, core/argos.py) deliberately does not use it - it runs
 entirely on the computer.
 """
 
+import urllib.request
+
 from utils.imports import socket
+
+
+def _uses_proxy():
+    """An HTTP(S) proxy is set (environment / system settings) - see has_internet_connection."""
+    try:
+        proxies = urllib.request.getproxies()
+    except Exception:
+        return False
+    return bool(proxies.get("https") or proxies.get("http"))
 
 
 def has_internet_connection(host="8.8.8.8", port=53, timeout=1.5):
@@ -17,7 +28,13 @@ def has_internet_connection(host="8.8.8.8", port=53, timeout=1.5):
     reachable while the specific service is not), but it is a fast and
     reliable enough signal for "no connection at all", so we don't wait
     through the full retry cycle for nothing in that case.
+
+    Behind a proxy (company networks) direct connections are often blocked
+    while the web works through the proxy - then the check is skipped and the
+    real request decides; otherwise online translation never worked there.
     """
+    if _uses_proxy():
+        return True
     try:
         # The timeout applies only to this connection. (This used to call
         # socket.setdefaulttimeout(), which changed the timeout of ALL

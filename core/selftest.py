@@ -208,7 +208,12 @@ def run_self_test(argv):
         from PyQt5 import QtTextToSpeech  # must be in the build (offline reading)
         engines = list(QtTextToSpeech.QTextToSpeech.availableEngines())
         if not engines:
-            return ("SKIP", "Qt TextToSpeech is bundled, but this machine has no speech engine")
+            # The engines are the Qt plugins inside the build (on Linux "speechd", talks to
+            # speech-dispatcher) - listing them doesn't need speech-dispatcher installed.
+            # None in the Linux build = offline reading can never work there.
+            if sys.platform.startswith("linux") and getattr(sys, "frozen", False):
+                raise RuntimeError("no Qt speech plugin (texttospeech/speechd) in the build")
+            return ("SKIP", "no Qt speech engine on this machine")
         engine = QtTextToSpeech.QTextToSpeech()
         locales = sorted({loc.name() for loc in engine.availableLocales()})
         return f"engines {engines}, {len(locales)} locale(s): {', '.join(locales[:8])}"

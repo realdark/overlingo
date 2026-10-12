@@ -52,6 +52,7 @@ def show_message(parent, i18n, title, text, kind="warning"):
     msg.setText(text)
     msg.setDefaultButton(msg.addButton(i18n.tr("ok_button"), QtWidgets.QMessageBox.AcceptRole))
     msg.exec_()
+    msg.deleteLater()
 
 
 def _rich_message(parent, title, html, icon=QtWidgets.QMessageBox.Information):
@@ -149,7 +150,9 @@ class HelpDialog(QtWidgets.QDialog):
 
 def show_help(parent, i18n):
     """The short user guide dialog."""
-    HelpDialog(parent, i18n).exec_()
+    dialog = HelpDialog(parent, i18n)
+    dialog.exec_()
+    dialog.deleteLater()
 
 
 def show_tesseract_missing(parent, i18n):

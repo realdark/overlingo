@@ -15,8 +15,8 @@ from core.argos_download import ArgosDownloadThread
 from core.translation_controller import TranslationController
 from core.settings_manager import SettingsManager
 from core.localization import UiLocalizer
-from core.audio_playback import AudioPlaybackToggle, AudioOptions
-from core.capture import capture_full_screen_qimage, warm_up
+from core.audio_playback import AudioPlaybackToggle, AudioOptions, wait_for_audio_threads
+from core.capture import capture_screen_qimage, warm_up
 from ui.components import SelectionWindow, WindowDragFilter, SecondaryOverlay, OverlayPanel
 from ui.settings_dialog import SettingsDialog
 from ui.history_window import HistoryWindow
@@ -65,6 +65,7 @@ class MainWindow(QtWidgets.QWidget):
 
         self.audio = AudioPlaybackToggle(set_icon=self._set_play_button_icon, on_notice=self._on_audio_notice)
         self._refresh_in_progress = False
+        self._timeout_message_open = False
         self.selection_rect = None
         self.selection_window = None
         self.translation_overlay = None
@@ -129,6 +130,11 @@ class MainWindow(QtWidgets.QWidget):
             source_lang=argos.source_language(self.ocr_lang),
         )
         self.translation_controller.configure(translator, self.ocr_lang, self.target_lang)
+        # Another service or source language - the cached translations are from the old one.
+        config = (self.translation_api, self.translation_api_key, self.ocr_lang)
+        if getattr(self, "_translator_config", config) != config:
+            self.translation_cache.clear()
+        self._translator_config = config
 
     # ------------------------------------------------------------------
     # UI layout
@@ -142,14 +148,20 @@ class MainWindow(QtWidgets.QWidget):
 
         self.i18n.set_language(self.settings.get("interface_language", "en"))
 
-        screen = QtWidgets.QApplication.primaryScreen().geometry()
+        screen = QtWidgets.QApplication.primaryScreen().availableGeometry()
         window_width, window_height = 800, 200
         self._full_window_height = window_height
         self._toolbar_only_height = 55  # just the button toolbar, without the overlay panel
-        x, y = (screen.width() - window_width) // 2, screen.height() - window_height - 10
+        x = screen.x() + (screen.width() - window_width) // 2
+        y = screen.y() + screen.height() - window_height - 10
 
-        if self.settings.get("window_pos"):
-            x, y = self.settings["window_pos"]
+        saved = self.settings.get("window_pos")
+        # Only if the saved position is still on a screen: after unplugging a second
+        # monitor the frameless toolbar (no title bar) opened off-screen, out of reach.
+        if saved and len(saved) == 2 and QtWidgets.QApplication.screenAt(
+            QtCore.QPoint(saved[0] + window_width // 2, saved[1] + 20)
+        ):
+            x, y = saved
 
         self.setGeometry(x, y, window_width, window_height)
 
@@ -434,8 +446,19 @@ class MainWindow(QtWidgets.QWidget):
         # the previous translation while we wait for the new OCR+translation (or, if the new
         # area is elsewhere on the screen, it doesn't move there at all).
         self._close_translation_overlay()
+        # A translation of the previous area may still be running - forget it, otherwise
+        # the new area is silently skipped (translate_selection waits for the old one)
+        # and the old result opens an overlay at the old position.
+        self._cancel_translation()
         self.save_selection(rect)
         QtCore.QTimer.singleShot(100, self.translate_selection)
+
+    def _cancel_translation(self):
+        """Drops the translation in progress (its late result is ignored)."""
+        self.translation_controller.cancel()
+        self._refresh_in_progress = False
+        self._overlay_pending_reshow = False
+        self.set_translation_status(False)
 
     def _close_translation_overlay(self):
         """Closes the current overlay (if any) right away, not only once the new translation is ready."""
@@ -480,6 +503,9 @@ class MainWindow(QtWidgets.QWidget):
             on_save=self.apply_settings,
         )
         dialog.exec_()
+        # Closed without saving - undo the opacity preview (after Save this is the new value).
+        self.overlay_panel.set_alpha(self.overlay_opacity)
+        dialog.deleteLater()  # otherwise every opening stayed in memory until exit
 
     def _preview_opacity(self, value):
         """Reacts to the opacity slider immediately, before Save is pressed."""
@@ -560,8 +586,12 @@ class MainWindow(QtWidgets.QWidget):
         """Starts selecting an area of the screen."""
         if self.selection_window and self.selection_window.isVisible():
             return  # already selecting (e.g. the hotkey was pressed twice)
-        screenshot_qt = capture_full_screen_qimage()
-        self.selection_window = SelectionWindow(screenshot_qt, hint_text=self.i18n.tr("selection_hint"))
+        # The monitor with the mouse pointer (with several monitors - where the user is looking).
+        screen = QtWidgets.QApplication.screenAt(QtGui.QCursor.pos()) or QtWidgets.QApplication.primaryScreen()
+        screenshot_qt = capture_screen_qimage(screen)
+        self.selection_window = SelectionWindow(
+            screenshot_qt, hint_text=self.i18n.tr("selection_hint"), screen=screen
+        )
         self.selection_window.selection_made.connect(callback)
         self.selection_window.show()
 
@@ -636,6 +666,10 @@ class MainWindow(QtWidgets.QWidget):
         # The font size is needed only for a new overlay - on auto-refresh and
         # "Translate again" over an already open overlay a second OCR pass
         # would be redundant.
+        if not self.selection_rect:
+            # "Clear" arrived during the short wait before the screenshot.
+            self._cancel_translation()
+            return
         detect_font_size = (
             self.preserve_font_size and self.overlay_translation_enabled and self.translation_overlay is None
         )
@@ -668,11 +702,19 @@ class MainWindow(QtWidgets.QWidget):
             # Offline translation is the default - the first translation offers the download.
             self.offer_argos_download(detail, then=self.translate_selection)
         if error_key == "translation_timeout":
+            # Auto refresh pauses - otherwise every tick times out again and stacks
+            # another warning on top of the previous one. "Translate again" resumes it.
+            self.refresh_timer.stop()
             # A separate visible pop-up only for timeouts - unlike
             # the other errors, here the user probably wants to know
             # right away (not just a line in the text panel), because the fix
             # is usually "increase the timeout in Settings", not just "try again".
-            show_message(self, self.i18n, self.i18n.tr("warning_title"), self.i18n.tr("translation_timeout"))
+            if not self._timeout_message_open:
+                self._timeout_message_open = True
+                try:
+                    show_message(self, self.i18n, self.i18n.tr("warning_title"), self.i18n.tr("translation_timeout"))
+                finally:
+                    self._timeout_message_open = False
         self._reshow_overlay_if_pending()
 
     def offer_argos_download(self, pair_text, then=None, parent=None):
@@ -794,6 +836,7 @@ class MainWindow(QtWidgets.QWidget):
             self.refresh_timer.stop()
 
     def clear_overlay(self):
+        self._cancel_translation()  # a translation still running must not bring the text back
         self.selection_rect = None
         self.retranslate_btn.setEnabled(False)
         self.audio.stop()  # nothing left to read
@@ -977,6 +1020,9 @@ class MainWindow(QtWidgets.QWidget):
             self.history_window.close()
         if self._update_thread:
             self._update_thread.wait(3000)  # a thread destroyed while running crashes Qt on exit
+        self.translation_controller.wait_for_threads()
+        self.audio.stop()
+        wait_for_audio_threads()
         self.save_settings_to_file()
         self.hotkey_manager.stop()
         self._close_translation_overlay()  # otherwise it is left "orphaned" on screen after closing

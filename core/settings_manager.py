@@ -85,7 +85,11 @@ class SettingsManager:
 
         api_type = settings["translation_api"]
         api_key = settings["translation_api_key"]
-        if api_type in ("deepl", "microsoft") and api_key:
+        if api_type in ("deepl", "microsoft"):
+            if not api_key.strip():
+                # Without a key there is no translator at all (and no Google fallback either) -
+                # every translation would fail with "no translator".
+                raise SettingsValidationError("api_key_required")
             self._check_translator_key(api_type, api_key, settings["target_lang"])
         elif api_type == "argos":
             # Missing models block saving only when switching to offline translation

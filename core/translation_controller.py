@@ -38,7 +38,11 @@ class TranslationController(QtCore.QObject):
         self.ocr_lang = None
         self.target_lang = None
         self.timeout_ms = timeout_ms
-        self._thread = None
+        # Every thread stays referenced until it finishes: a QThread destroyed while
+        # still running aborts the whole app ("QThread: Destroyed while thread is
+        # still running") - e.g. after a timeout, when the next translation started
+        # while the old thread was still waiting for the network.
+        self._threads = set()
         self._generation = 0
 
         self._watchdog = QtCore.QTimer(self)
@@ -72,7 +76,7 @@ class TranslationController(QtCore.QObject):
         self._generation += 1
         my_generation = self._generation
 
-        self._thread = TranslationThread(
+        thread = TranslationThread(
             gray_img=gray,
             ocr_lang=self.ocr_lang,
             translator=self.translator,
@@ -80,18 +84,33 @@ class TranslationController(QtCore.QObject):
             translation_cache=self.cache,
             detect_font_size=detect_font_size,
         )
-        self._thread.finished_signal.connect(
+        thread.finished_signal.connect(
             lambda source_text, translated_text, from_cache, fallback_used, font_size: self._on_finished(
                 my_generation, source_text, translated_text, from_cache, fallback_used, font_size, rect
             )
         )
-        self._thread.failed_signal.connect(
+        thread.failed_signal.connect(
             lambda source_text, error_key, detail: self._on_failed(
                 my_generation, source_text, error_key, detail
             )
         )
-        self._thread.start()
+        thread.finished.connect(lambda t=thread: self._threads.discard(t))
+        self._threads.add(thread)
+        thread.start()
         self._watchdog.start(self.timeout_ms)
+
+    def cancel(self):
+        """
+        Forgets the translation in progress (a new area was selected, or "Clear"):
+        its result, when it arrives, is ignored. The thread itself finishes on its own.
+        """
+        self._generation += 1
+        self._watchdog.stop()
+
+    def wait_for_threads(self, timeout_ms=3000):
+        """Called on app exit - so a thread isn't destroyed while it is running."""
+        for thread in list(self._threads):
+            thread.wait(timeout_ms)
 
     def _on_timeout(self):
         """The maximum wait time has elapsed - release the UI."""

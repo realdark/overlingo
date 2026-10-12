@@ -171,3 +171,20 @@ class NoUntranslatedButtonsTest(unittest.TestCase):
                 if pattern.search(line):
                     offenders.append(f"{path.name}:{number}: {line.strip()}")
         self.assertEqual(offenders, [], "use ui.dialogs.show_message / addButton(i18n text) instead")
+
+
+class NoHardCodedBulgarianTest(unittest.TestCase):
+    """UI texts come from assets/locales - Bulgarian written in the code shows up in the English UI too."""
+
+    def test_no_cyrillic_in_code(self):
+        cyrillic = re.compile("[Ѐ-ӿ]")
+        root = Path(__file__).resolve().parent.parent
+        offenders = []
+        for folder in ("ui", "core", "utils"):
+            for path in sorted((root / folder).glob("*.py")):
+                if path.name == "argos.py":
+                    continue  # Bulgarian abbreviations as data for splitting sentences, not UI text
+                for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                    if cyrillic.search(line):
+                        offenders.append(f"{folder}/{path.name}:{number}: {line.strip()}")
+        self.assertEqual(offenders, [], "move these texts to assets/locales/*.json")

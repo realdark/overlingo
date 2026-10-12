@@ -6,6 +6,11 @@ from utils.imports import QThread, QtCore, asyncio, edge_tts, tempfile, pygame, 
 from utils.logging_setup import logger
 from core.network import has_internet_connection
 
+# pygame has ONE music player for the whole app, shared by every play button.
+# Only the thread whose file is loaded in it may stop/unload it - otherwise
+# stopping an old thread cut off the audio another button had just started.
+_mixer_owner = None
+
 
 class AudioThread(QThread):
     finished_signal = QtCore.pyqtSignal()
@@ -23,23 +28,29 @@ class AudioThread(QThread):
         asyncio.run(self._play_edge_tts())
         
     def stop(self):
+        """
+        Called from the GUI thread; returns immediately. The thread notices the flag
+        (between downloaded chunks or while playing), stops and deletes its file
+        itself - deleting it from here failed while it was still being written.
+        """
         self._stop_flag = True
         # Stop can come before playback has started (the audio is still being
         # downloaded) - then the mixer isn't initialized yet and stop() would raise.
         try:
-            if pygame.mixer.get_init():
+            if _mixer_owner is self and pygame.mixer.get_init():
                 pygame.mixer.music.stop()
         except pygame.error as e:
             logger.warning(f"Could not stop playback: {e}")
-        self.cleanup_temp_file()
-        
+
     def cleanup_temp_file(self):
         """Clean up the temporary file"""
+        global _mixer_owner
         try:
-            # Stop the music first to release the file
-            if pygame.mixer.get_init():
+            # Stop the music first to release the file (only if it is ours)
+            if _mixer_owner is self and pygame.mixer.get_init():
                 pygame.mixer.music.stop()
                 pygame.mixer.music.unload()
+                _mixer_owner = None
             
             # Short delay so the file gets released
             time.sleep(0.1)
@@ -91,6 +102,8 @@ class AudioThread(QThread):
         # The file is opened once for all chunks (not once per chunk).
         with open(path, "wb") as f:
             async for chunk in communicate.stream():
+                if self._stop_flag:
+                    break  # stopped while downloading - no need to wait for the rest
                 if chunk["type"] == "audio":
                     f.write(chunk["data"])
 
@@ -98,13 +111,15 @@ class AudioThread(QThread):
 
     def _play_audio_blocking(self, path):
         """Plays the downloaded .mp3 and waits (checking _stop_flag) until it finishes."""
+        global _mixer_owner
         if not pygame.mixer.get_init():
             pygame.mixer.init()
 
+        _mixer_owner = self
         pygame.mixer.music.load(path)
         pygame.mixer.music.play()
 
-        while pygame.mixer.music.get_busy():
+        while _mixer_owner is self and pygame.mixer.music.get_busy():
             if self._stop_flag:
                 pygame.mixer.music.stop()
                 break

@@ -226,6 +226,12 @@ class TranslateWithCacheTest(unittest.TestCase):
         translator = FallbackTranslator(_Fixed(error=RuntimeError("down")), _Fixed("резерва"))
         self.assertEqual(translations.translate_with_cache(translator, "x", "BG"), ("резерва", False, "google"))
 
+    def test_google_fallback_is_not_cached(self):
+        cache = TranslationCache()
+        translator = FallbackTranslator(_Fixed(error=RuntimeError("down")), _Fixed("резерва"))
+        translations.translate_with_cache(translator, "x", "BG", cache)
+        self.assertIsNone(cache.get("x", "BG"))  # next time the chosen service is tried again
+
     def test_offline_translation_is_not_cached(self):
         cache = TranslationCache()
         translator = FallbackTranslator(_Fixed(error=translations.NoInternetError("x")), None, _Fixed("офлайн"))

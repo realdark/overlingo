@@ -12,6 +12,7 @@ Engines (Settings -> Audio -> "Reading voice"):
   - "edge": Microsoft Edge neural voices via edge-tts (online, core/audio_handler.py).
 """
 
+import weakref
 from collections import namedtuple
 
 from core.audio_handler import AudioThread
@@ -41,6 +42,20 @@ DEFAULT_EDGE_VOICES = {
     "sl": "sl-SI-PetraNeural", "sr": "sr-RS-SophieNeural", "sv": "sv-SE-SofieNeural",
     "tr": "tr-TR-EmelNeural", "uk": "uk-UA-PolinaNeural", "zh": "zh-CN-XiaoxiaoNeural",
 }
+
+
+# Every play button's toggle - starting one stops the others (one voice at a time;
+# the online voice also shares a single music player).
+_toggles = weakref.WeakSet()
+# Online-voice threads that were stopped but are still finishing (e.g. the
+# download in progress) - referenced until they end, never waited for in the GUI.
+_finishing = set()
+
+
+def wait_for_audio_threads(timeout_ms=2000):
+    """Called on app exit - so a thread isn't destroyed while it is running."""
+    for thread in list(_finishing):
+        thread.wait(timeout_ms)
 
 
 def edge_voice_for(options):
@@ -73,6 +88,7 @@ class AudioPlaybackToggle:
         self._on_notice = on_notice
         self.audio_thread = None
         self._system = None
+        _toggles.add(self)
 
     def _notify(self, key):
         if self._on_notice:
@@ -91,6 +107,9 @@ class AudioPlaybackToggle:
     def start(self, text, options):
         if not text:
             return
+        for other in list(_toggles):
+            if other is not self and other.is_playing():
+                other.stop()
         if options.engine != ENGINE_EDGE:
             if self._system is None:
                 self._system = SystemSpeech()
@@ -119,10 +138,19 @@ class AudioPlaybackToggle:
     def stop(self):
         if self._system is not None:
             self._system.stop()
-        if self.audio_thread:
-            self.audio_thread.stop()
-            self.audio_thread.wait()
-            self.audio_thread = None
+        thread, self.audio_thread = self.audio_thread, None
+        if thread:
+            # No wait() here: while the online voice is still downloading the window
+            # froze until the download finished. The thread stops on its own.
+            for signal in (thread.finished_signal, thread.no_internet_signal):
+                try:
+                    signal.disconnect()
+                except TypeError:
+                    pass
+            thread.stop()
+            if thread.isRunning():
+                _finishing.add(thread)
+                thread.finished.connect(lambda t=thread: _finishing.discard(t))
         self._set_icon("play_button.png")
 
     def _on_finished(self):

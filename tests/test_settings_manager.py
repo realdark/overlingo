@@ -54,6 +54,13 @@ class SettingsManagerTest(unittest.TestCase):
              mock.patch.object(settings_manager.argos, "installed_pairs", return_value={("en", "bg")}):
             self.manager.validate(settings)  # no error
 
+    def test_paid_service_needs_an_api_key(self):
+        for service in ("deepl", "microsoft"):
+            settings = dict(DEFAULT_SETTINGS, translation_api=service, translation_api_key="  ")
+            with self.assertRaises(SettingsValidationError) as ctx:
+                self.manager.validate(settings)
+            self.assertEqual(ctx.exception.message_key, "api_key_required")
+
     def test_missing_offline_models_block_only_when_switching_to_offline(self):
         settings = dict(DEFAULT_SETTINGS, translation_api="argos", ocr_lang="eng", target_lang="BG")
         with mock.patch.object(settings_manager.argos, "libraries_available", return_value=True), \

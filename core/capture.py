@@ -28,23 +28,54 @@ def is_region_too_small(rect):
     return width < MIN_REGION_SIZE or height < MIN_REGION_SIZE
 
 
+def physical_region(left, top, width, height, screen_origin=(0, 0), ratio=1.0):
+    """
+    Qt (logical) coordinates -> real screen pixels for mss. With display scaling
+    (devicePixelRatio > 1) Qt keeps each screen's top-left corner in real pixels
+    and scales only the distances within the screen.
+    """
+    ox, oy = screen_origin
+    return {
+        "left": int(round(ox + (left - ox) * ratio)),
+        "top": int(round(oy + (top - oy) * ratio)),
+        "width": max(1, int(round(width * ratio))),
+        "height": max(1, int(round(height * ratio))),
+    }
+
+
+def _screen_of(rect):
+    """The QScreen the rect is on (by its center), or None without a QApplication."""
+    from utils.imports import QtWidgets
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return None
+    return QtWidgets.QApplication.screenAt(rect.center()) or QtWidgets.QApplication.primaryScreen()
+
+
+def _mss_region(rect):
+    screen = _screen_of(rect)
+    if screen is None:
+        return physical_region(rect.left(), rect.top(), rect.width(), rect.height())
+    origin = screen.geometry().topLeft()
+    return physical_region(
+        rect.left(), rect.top(), rect.width(), rect.height(),
+        (origin.x(), origin.y()), screen.devicePixelRatio(),
+    )
+
+
 def capture_region_as_gray(rect):
     """
-    Takes a screenshot of the given rect and returns a preprocessed
-    grayscale image (numpy array), ready for OCR.
+    Takes a screenshot of the given rect (global Qt coordinates) and returns a
+    preprocessed grayscale image (numpy array), ready for OCR.
 
     Raises CaptureError if the region is too small or the capture fails.
     """
     if is_region_too_small(rect):
         raise CaptureError("area_too_small")
 
-    x1, y1 = rect.left(), rect.top()
-    width = max(1, rect.right() - x1)
-    height = max(1, rect.bottom() - y1)
-
     try:
+        monitor = _mss_region(rect)
         with mss.mss() as sct:
-            monitor = {"top": y1, "left": x1, "width": width, "height": height}
             raw = np.array(sct.grab(monitor))
     except Exception as e:
         raise CaptureError("screenshot_error") from e
@@ -76,23 +107,24 @@ def warm_up():
         logger.warning(f"Failed to warm up mss: {e}")
 
 
-def capture_full_screen_qimage():
+def capture_screen_qimage(screen):
     """
-    Takes a screenshot of the entire primary monitor and returns it as a QImage
-    (used by the region selection window).
+    Screenshot of one monitor (a QScreen) as a QImage - the background of the
+    area selection window, which opens on that monitor.
     """
     from utils.imports import QtGui
 
+    geometry = screen.geometry()
+    monitor = physical_region(
+        geometry.left(), geometry.top(), geometry.width(), geometry.height(),
+        (geometry.left(), geometry.top()), screen.devicePixelRatio(),
+    )
     with mss.mss() as sct:
-        monitor = sct.monitors[0]
-        raw = np.array(sct.grab(monitor))[:, :, :3]
+        raw = np.ascontiguousarray(np.array(sct.grab(monitor))[:, :, :3])
 
-        height, width, _ = raw.shape
-        bytes_per_line = 3 * width
-        img_bytes = raw.tobytes()
-
-        image = QtGui.QImage(
-            img_bytes, width, height, bytes_per_line, QtGui.QImage.Format_RGB888
-        )
-        # Copy the data so it doesn't dangle after raw/img_bytes are freed
-        return image.copy()
+    height, width, _ = raw.shape
+    # mss gives BGRA - the first three bytes are blue, green, red (as RGB888 the
+    # colours came out swapped).
+    image = QtGui.QImage(raw.tobytes(), width, height, 3 * width, QtGui.QImage.Format_BGR888)
+    # Copy the data so it doesn't dangle after raw is freed
+    return image.copy()

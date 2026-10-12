@@ -335,9 +335,10 @@ def translate_with_cache(translator, text, target_lang, cache=None):
         return cached, True, ""
     translated = translator.translate(text, target_lang)
     fallback_used = getattr(translator, "fallback_used", "")
-    # Offline translation (when there is no internet) is not cached - once the internet
-    # is back, the same text should go through the better online service again.
-    if cache is not None and fallback_used != "offline":
+    # A fallback result is not cached - offline (no internet) or Google (the chosen
+    # service failed): next time the same text should go through the chosen
+    # service again instead of quietly reusing the substitute.
+    if cache is not None and not fallback_used:
         cache.put(text, translated, target_lang)
     return translated, False, fallback_used
 

@@ -4,6 +4,8 @@ settings.json.tmp
 app.log
 app.log.*
 crash.log
+selftest.log
+selftest-tts.wav
 
 # Python
 __pycache__/
