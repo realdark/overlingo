@@ -169,6 +169,26 @@ def run_self_test(argv):
 
     report.run("argos-libraries", argos_libraries)
 
+    def hotkey_backend():
+        # Starts a real pynput listener, like core/hotkey_manager.py. pynput picks its
+        # backend at import time - a build once lacked pynput.mouse._xorg and hotkeys
+        # failed with "No module named 'pynput.mouse._xorg'". On Linux it needs an
+        # X display (CI runs the self-test under xvfb-run).
+        if sys.platform not in ("win32", "linux"):
+            return ("SKIP", "no global hotkeys on this platform")
+        if sys.platform == "linux" and not os.environ.get("DISPLAY"):
+            return ("SKIP", "no X display (run under xvfb-run)")
+        from pynput import keyboard
+        listener = keyboard.GlobalHotKeys({"<ctrl>+<alt>+<shift>+<f12>": lambda: None})
+        listener.start()
+        try:
+            listener.wait()
+        finally:
+            listener.stop()
+        return f"{type(listener).__module__}"
+
+    report.run("hotkey-backend", hotkey_backend)
+
     def system_tts():
         if sys.platform == "win32":
             return _windows_tts(report.log_path.parent)

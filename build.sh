@@ -43,6 +43,10 @@ pyinstaller --onedir --noconsole \
   --hidden-import=pynput \
   --hidden-import=pynput.keyboard \
   --hidden-import=pynput.keyboard._xorg \
+  --hidden-import=pynput.mouse \
+  --hidden-import=pynput.mouse._xorg \
+  --hidden-import=pynput._util.xorg \
+  --hidden-import=pynput._util.xorg_keysyms \
   --collect-all ctranslate2 \
   --exclude-module torch \
   --exclude-module transformers \
@@ -58,6 +62,10 @@ pyinstaller --onedir --noconsole \
   # (HOTKEY_SUPPORTED check - see core/hotkey_manager.py), not under
   # Wayland. "_xorg" is pynput's Linux backend (see pynput docs) -
   # NOT "_win32", that one is for build.bat.
+  # The backends are listed explicitly (keyboard AND mouse - "import pynput"
+  # loads both): PyInstaller's own pynput hook finds them only by importing
+  # pynput, which fails without an X display (GitHub Actions) - then the
+  # build silently lacked pynput.mouse._xorg and hotkeys failed to start.
 
 # Copy assets
 echo "Copying assets..."

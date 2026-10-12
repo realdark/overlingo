@@ -76,6 +76,10 @@ pyinstaller --onedir --noconsole ^
   --hidden-import=pynput ^
   --hidden-import=pynput.keyboard ^
   --hidden-import=pynput.keyboard._win32 ^
+  --hidden-import=pynput.mouse ^
+  --hidden-import=pynput.mouse._win32 ^
+  --hidden-import=pynput._util.win32 ^
+  --hidden-import=pynput._util.win32_vks ^
   --collect-all ctranslate2 ^
   --exclude-module torch ^
   --exclude-module transformers ^
