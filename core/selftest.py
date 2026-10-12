@@ -142,6 +142,17 @@ def run_self_test(argv):
             raise RuntimeError("Tesseract not found in the known locations")
         return f"{path} (version {pytesseract.get_tesseract_version()})"
 
+    def child_env():
+        # Programs we start (tesseract...) must not get the build's library folder -
+        # on a newer Linux the system tesseract then failed ("GLIBCXX_3.4.32 not found").
+        bundle = getattr(sys, "_MEIPASS", None)
+        path = os.environ.get("LD_LIBRARY_PATH", "")
+        if bundle and bundle in path:
+            raise RuntimeError(f"LD_LIBRARY_PATH still points into the build: {path}")
+        return f"LD_LIBRARY_PATH={path or '(not set)'}"
+
+    report.run("child-env", child_env)
+
     tesseract_ok = report.run("tesseract", tesseract) is not None
 
     def ocr():

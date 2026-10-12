@@ -4,6 +4,11 @@ APPLICATION ENTRY POINT
 
 import sys
 
+# Linux build: programs we start (tesseract, xprop...) must use the system's
+# libraries, not the build's - see utils/child_env.py.
+from utils.child_env import restore_library_path
+restore_library_path()
+
 # Windows: ctranslate2 (offline translation) is loaded BEFORE PyQt5/OpenCV.
 # PyQt5 ships an older version of the C++ library msvcp140.dll; if it is
 # loaded first, ctranslate2 (compiled against a newer one) uses it and the

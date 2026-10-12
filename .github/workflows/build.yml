@@ -173,9 +173,50 @@ jobs:
             if [ -f "$f" ]; then echo "===== $f"; cat "$f"; fi
           done
 
+  linux-newer:
+    # The Linux build is made on Ubuntu 22.04 (older glibc - it runs on more
+    # distros). Here the SAME archive runs on a newer system, with that
+    # system's tesseract: catches the build's libraries leaking into the
+    # programs we start (3.4.2: "GLIBCXX_3.4.32 not found" from tesseract).
+    name: Linux build on Ubuntu 24.04
+    needs: [build]
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/download-artifact@v7
+        with:
+          name: Overlingo-linux-x86_64
+          path: artifact
+      - name: Unpack
+        run: tar -xzf artifact/Overlingo-*-linux-*.tar.gz -C "$RUNNER_TEMP"
+      - name: Tesseract and system libraries
+        timeout-minutes: 10
+        run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y tesseract-ocr libegl1 libgl1 libxkbcommon0 libdbus-1-3 libfontconfig1 xvfb
+      - name: Download a model for the offline translation check
+        run: |
+          pip install -r requirements.txt
+          python tools/fetch_argos_model.py "$RUNNER_TEMP/argos-models" en de
+      - name: Self-test
+        timeout-minutes: 10
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: xvfb-run -a "$RUNNER_TEMP/overlingo/overlingo" --self-test --require-argos --argos-models "$RUNNER_TEMP/argos-models" --log "$RUNNER_TEMP/selftest.log"
+      - name: Logs when something failed
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP/selftest.log" "$RUNNER_TEMP/overlingo/app.log" "$RUNNER_TEMP/overlingo/crash.log"; do
+            if [ -f "$f" ]; then echo "===== $f"; cat "$f"; fi
+          done
+
   release:
     name: Attach to release
-    needs: [build]
+    needs: [build, linux-newer]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
